@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "Weblang Selector & Translator",
+  "version": "0.1.0",
+  "description": "Select words on any page, highlight like Weblang, and translate client-side.",
+  "action": {
+    "default_title": "Weblang Selector & Translator"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "side_panel": {
+    "default_path": "sidebar.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["page-prompt.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
+
+

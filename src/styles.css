@@ -1,0 +1,14 @@
+/* Minimal styles; most inline in content.js to avoid collisions */
+.weblang-ext-word {
+  /* marker class for query; visual styles applied inline to avoid site overrides */
+}
+.weblang-ext-popup {
+  /* popup base class; styled inline */
+}
+
+@keyframes weblang-gradient-spin {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
