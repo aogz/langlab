@@ -93,7 +93,9 @@
                   url: word.url,
                   title: word.url,
                   timestamp: word.savedAt || word.lastSaved || Date.now(),
-                  domain: getDomainFromUrl(word.url)
+                  domain: getDomainFromUrl(word.url),
+                  correctAnswers: 0,
+                  isKnown: false
                 });
               }
             }
@@ -301,7 +303,7 @@
         <th>Word</th>
         <th>Translation</th>
         <th>Language</th>
-        <th>Time</th>
+        <th>Progress</th>
         <th></th>
       </tr>
     `;
@@ -350,7 +352,7 @@
         <th>Word</th>
         <th>Translation</th>
         <th>Language</th>
-        <th>Time</th>
+        <th>Progress</th>
         <th></th>
       </tr>
     `;
@@ -375,14 +377,27 @@
     const row = document.createElement('tr');
     row.setAttribute('data-word-id', word.id);
     
-    const timeAgo = getTimeAgo(word.timestamp);
     const language = word.sourceLanguage || 'unknown';
+    const correctAnswers = word.correctAnswers || 0;
+    const isKnown = word.isKnown || false;
+    
+    // Apply known styling
+    if (isKnown) {
+      row.style.opacity = '0.6';
+      row.style.backgroundColor = 'rgba(34,197,94,0.05)';
+    }
+    
+    // Create progress circle
+    const progressPercentage = (correctAnswers / 7) * 100;
+    const progressCircle = createProgressCircle(correctAnswers, isKnown, progressPercentage);
     
     row.innerHTML = `
-      <td class="word-text">${word.word}</td>
+      <td class="word-text">
+        ${isKnown ? '✅ ' : ''}${word.word}
+      </td>
       <td class="word-translation">${word.translation || 'Translation not available'}</td>
       <td class="word-language">${language}</td>
-      <td class="word-time">${timeAgo}</td>
+      <td class="word-progress">${progressCircle}</td>
       <td class="word-actions">
         <button class="remove-btn" data-word-id="${word.id}">Remove</button>
       </td>
@@ -393,6 +408,26 @@
     removeBtn.addEventListener('click', () => removeWord(word.id));
 
     return row;
+  }
+
+  // Create progress circle element
+  function createProgressCircle(correctAnswers, isKnown, progressPercentage) {
+    if (isKnown) {
+      return `
+        <div class="progress-circle known">
+          <div class="progress-text">✓</div>
+        </div>
+      `;
+    }
+    
+    const degrees = (progressPercentage / 100) * 360;
+    const circleStyle = `background: conic-gradient(#22c55e ${degrees}deg, rgba(31,41,55,0.6) ${degrees}deg);`;
+    
+    return `
+      <div class="progress-circle" style="${circleStyle}">
+        <div class="progress-text">${correctAnswers}</div>
+      </div>
+    `;
   }
 
 
@@ -440,8 +475,12 @@
       return;
     }
 
-    // Initialize practice session
-    practiceWords = [...filteredWords];
+    // Initialize practice session - prioritize unknown words
+    const unknownWords = filteredWords.filter(word => !word.isKnown);
+    const knownWords = filteredWords.filter(word => word.isKnown);
+    
+    // Mix unknown words first, then known words
+    practiceWords = [...unknownWords, ...knownWords];
     currentQuestionIndex = 0;
     correctAnswers = 0;
     practiceMode = Math.random() < 0.5 ? 'source-to-target' : 'target-to-source';
@@ -485,9 +524,13 @@
     
     // Update question text
     document.getElementById('questionText').textContent = question;
+    const correctAnswers = currentWord.correctAnswers || 0;
+    const isKnown = currentWord.isKnown || false;
+    const progressText = isKnown ? ' (Known!)' : ` (${correctAnswers}/7)`;
+    
     document.getElementById('questionHint').textContent = practiceMode === 'source-to-target' 
-      ? `What does "${currentWord.word}" mean?` 
-      : `What is the translation of "${currentWord.translation}"?`;
+      ? `What does "${currentWord.word}" mean?${progressText}` 
+      : `What is the translation of "${currentWord.translation}"?${progressText}`;
 
     // Create options
     const optionsContainer = document.getElementById('practiceOptions');
@@ -561,9 +604,12 @@
       }
     });
 
-    // Update score
+    // Update score and word progress
     if (selectedAnswer === correctAnswer) {
       correctAnswers++;
+      updateWordProgress(practiceWords[currentQuestionIndex], true);
+    } else {
+      updateWordProgress(practiceWords[currentQuestionIndex], false);
     }
 
     // Move to next question after a delay
@@ -578,6 +624,30 @@
     document.getElementById('progressFill').style.width = `${progress}%`;
     document.getElementById('progressText').textContent = 
       `Question ${currentQuestionIndex + 1} of ${practiceWords.length}`;
+  }
+
+  function updateWordProgress(word, isCorrect) {
+    // Find the word in savedWords and update its progress
+    const wordIndex = savedWords.findIndex(w => w.id === word.id);
+    if (wordIndex !== -1) {
+      if (isCorrect) {
+        savedWords[wordIndex].correctAnswers = (savedWords[wordIndex].correctAnswers || 0) + 1;
+        
+        // Mark as known if correct answers reach 7
+        if (savedWords[wordIndex].correctAnswers >= 7) {
+          savedWords[wordIndex].isKnown = true;
+        }
+      } else {
+        // Reset progress on incorrect answer (optional - you might want to keep this)
+        // savedWords[wordIndex].correctAnswers = Math.max(0, (savedWords[wordIndex].correctAnswers || 0) - 1);
+      }
+      
+      // Save updated words to storage
+      saveWords();
+      
+      // Update the display to reflect the new status
+      updateDisplay();
+    }
   }
 
   function showResults() {

@@ -177,7 +177,9 @@
         title: title || url,
         timestamp: timestamp,
         domain: getDomainFromUrl(url),
-        sourceLanguage: sourceLanguage || 'unknown'
+        sourceLanguage: sourceLanguage || 'unknown',
+        correctAnswers: 0,
+        isKnown: false
       }));
 
       // Add to existing words and save
