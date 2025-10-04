@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Weblang Selector & Translator",
+  "name": "LangLab Selector & Translator",
   "version": "0.1.0",
-  "description": "Select words on any page, highlight like Weblang, and translate client-side.",
+  "description": "Select words on any page, highlight like LangLab, and translate client-side.",
   "action": {
-    "default_title": "Weblang Selector & Translator"
+    "default_title": "LangLab Selector & Translator"
   },
   "permissions": [
     "activeTab",

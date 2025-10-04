@@ -2,8 +2,28 @@
 
 chrome.runtime.onInstalled.addListener(() => {});
 
+// Handle extension icon click to open sidebar
+chrome.action.onClicked.addListener(async (tab) => {
+  try {
+    console.log('Extension icon clicked, opening sidebar for tab:', tab.id);
+    await chrome.sidePanel.open({ tabId: tab.id });
+    console.log('Sidebar opened successfully');
+  } catch (error) {
+    console.error('Failed to open sidebar:', error);
+    // Fallback: try to open without tabId
+    try {
+      await chrome.sidePanel.open();
+      console.log('Sidebar opened without tabId');
+    } catch (fallbackError) {
+      console.error('Fallback sidebar open also failed:', fallbackError);
+    }
+  }
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || !sender) return;
+  
+  
   if (message.type === 'WEBLANG_PROMPT_REQUEST') {
     const tabId = sender.tab && sender.tab.id;
     if (!tabId) return;
@@ -56,7 +76,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } catch (e) {}
     })();
   }
-  // Sidebar functionality removed for now
 });
 
 

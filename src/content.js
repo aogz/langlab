@@ -28,6 +28,7 @@
   let popupContentEl = null;
   let isPopupCollapsed = false;
   let dragListenersAttached = false;
+  let currentDetectedLanguage = 'unknown';
 
   function attachDragListeners() {
     if (dragListenersAttached) return;
@@ -120,11 +121,88 @@
       });
 
       console.log('Word saved to vocabulary:', { word: selectedWord, translation: translationText, url: currentUrl });
+      
+      // Wait for language detection to complete, then save to sidebar
+      let detectedLanguage = currentDetectedLanguage;
+      if (window.currentLanguageDetectionPromise) {
+        try {
+          detectedLanguage = await window.currentLanguageDetectionPromise;
+          console.log('Language detection completed:', detectedLanguage);
+        } catch (error) {
+          console.error('Error waiting for language detection:', error);
+        }
+      }
+      console.log('Saving words with language:', detectedLanguage);
+      await saveWordsToSidebar(selectedWords, currentUrl, document.title, translationText, detectedLanguage);
+      
+      // Return result for UI feedback
+      return {
+        success: true,
+        isNewWord: !existingEntry,
+        word: selectedWord
+      };
     } catch (error) {
       console.error('Failed to save word to vocabulary:', error);
       throw error;
     }
   }
+
+  // New function to save words to sidebar storage
+  async function saveWordsToSidebar(words, url, title, translation, sourceLanguage) {
+    try {
+      // Get existing words from sidebar storage
+      const result = await chrome.storage.local.get(['langlabSavedWords']);
+      const existingWords = result.langlabSavedWords || [];
+      
+      // Filter out words that already exist for this URL
+      const newWords = words.filter(word => 
+        !existingWords.some(existing => 
+          existing.word.toLowerCase() === word.toLowerCase() && 
+          existing.url === url
+        )
+      );
+
+      if (newWords.length === 0) {
+        console.log('All selected words already exist for this URL');
+        return { success: false, reason: 'already_exists' };
+      }
+
+      // Create new word objects
+      const timestamp = Date.now();
+      const wordsToAdd = newWords.map(word => ({
+        id: `${url}-${word}-${timestamp}-${Math.random()}`,
+        word: word,
+        translation: translation || '',
+        url: url,
+        title: title || url,
+        timestamp: timestamp,
+        domain: getDomainFromUrl(url),
+        sourceLanguage: sourceLanguage || 'unknown'
+      }));
+
+      // Add to existing words and save
+      const updatedWords = [...existingWords, ...wordsToAdd];
+      await chrome.storage.local.set({ langlabSavedWords: updatedWords });
+      
+      console.log('Saved words to sidebar storage:', wordsToAdd.length);
+      return { success: true, newWordsCount: wordsToAdd.length };
+    } catch (error) {
+      console.error('Failed to save words to sidebar storage:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Helper function to get domain from URL
+  function getDomainFromUrl(url) {
+    try {
+      const urlObj = new URL(url);
+      return urlObj.hostname;
+    } catch {
+      return url;
+    }
+  }
+
+
 
   async function getVocabForUrl(url = null) {
     try {
@@ -338,13 +416,27 @@
       
       saveBtn.addEventListener('click', async () => {
         try {
-          await saveWordToVocab(text.trim());
-          saveBtn.textContent = 'Added!';
-          saveBtn.style.background = '#10b981';
-          setTimeout(() => {
-            saveBtn.textContent = 'Add to Vocab';
-            saveBtn.style.background = '#2563eb';
-          }, 1500);
+          const result = await saveWordToVocab(text.trim());
+          if (result.success) {
+            if (result.isNewWord) {
+              saveBtn.textContent = 'Added!';
+              saveBtn.style.background = '#10b981';
+            } else {
+              saveBtn.textContent = 'Updated!';
+              saveBtn.style.background = '#f59e0b';
+            }
+            setTimeout(() => {
+              saveBtn.textContent = 'Add to Vocab';
+              saveBtn.style.background = '#2563eb';
+            }, 1500);
+          } else {
+            saveBtn.textContent = 'Already exists';
+            saveBtn.style.background = '#6b7280';
+            setTimeout(() => {
+              saveBtn.textContent = 'Add to Vocab';
+              saveBtn.style.background = '#2563eb';
+            }, 1500);
+          }
         } catch (error) {
           saveBtn.textContent = 'Error';
           saveBtn.style.background = '#ef4444';
@@ -458,13 +550,27 @@
       
       saveBtn.addEventListener('click', async () => {
         try {
-          await saveWordToVocab(resultText.trim());
-          saveBtn.textContent = 'Added!';
-          saveBtn.style.background = '#059669';
-          setTimeout(() => {
-            saveBtn.textContent = 'Add to Vocab';
-            saveBtn.style.background = '#10b981';
-          }, 1500);
+          const result = await saveWordToVocab(resultText.trim());
+          if (result.success) {
+            if (result.isNewWord) {
+              saveBtn.textContent = 'Added!';
+              saveBtn.style.background = '#059669';
+            } else {
+              saveBtn.textContent = 'Updated!';
+              saveBtn.style.background = '#f59e0b';
+            }
+            setTimeout(() => {
+              saveBtn.textContent = 'Add to Vocab';
+              saveBtn.style.background = '#10b981';
+            }, 1500);
+          } else {
+            saveBtn.textContent = 'Already exists';
+            saveBtn.style.background = '#6b7280';
+            setTimeout(() => {
+              saveBtn.textContent = 'Add to Vocab';
+              saveBtn.style.background = '#10b981';
+            }, 1500);
+          }
         } catch (error) {
           saveBtn.textContent = 'Error';
           saveBtn.style.background = '#ef4444';
@@ -898,13 +1004,27 @@
       
       saveBtn.addEventListener('click', async () => {
         try {
-          await saveWordToVocab(resultText.trim());
-          saveBtn.textContent = 'Added!';
-          saveBtn.style.background = '#059669';
-          setTimeout(() => {
-            saveBtn.textContent = 'Add to Vocab';
-            saveBtn.style.background = '#10b981';
-          }, 1500);
+          const result = await saveWordToVocab(resultText.trim());
+          if (result.success) {
+            if (result.isNewWord) {
+              saveBtn.textContent = 'Added!';
+              saveBtn.style.background = '#059669';
+            } else {
+              saveBtn.textContent = 'Updated!';
+              saveBtn.style.background = '#f59e0b';
+            }
+            setTimeout(() => {
+              saveBtn.textContent = 'Add to Vocab';
+              saveBtn.style.background = '#10b981';
+            }, 1500);
+          } else {
+            saveBtn.textContent = 'Already exists';
+            saveBtn.style.background = '#6b7280';
+            setTimeout(() => {
+              saveBtn.textContent = 'Add to Vocab';
+              saveBtn.style.background = '#10b981';
+            }, 1500);
+          }
         } catch (error) {
           saveBtn.textContent = 'Error';
           saveBtn.style.background = '#ef4444';
@@ -1056,9 +1176,25 @@
     const langBtn = document.createElement('button');
     langBntStyles(langBtn);
     langBtn.textContent = 'Detecting…';
-    detectLanguageCode(selectedText, (msg)=>{ try { langBtn.textContent = msg; } catch {} }).then((code)=>{
-      try { langBtn.textContent = code || 'unknown'; } catch {}
+    
+    // Store the promise so we can wait for it later
+    const languageDetectionPromise = detectLanguageCode(selectedText, (msg)=>{ 
+      try { langBtn.textContent = msg; } catch {} 
+    }).then((code)=>{
+      try { 
+        const detectedLang = code || 'unknown';
+        console.log('Language detected for text:', selectedText, '->', detectedLang);
+        langBtn.textContent = detectedLang;
+        currentDetectedLanguage = detectedLang; // Store for reuse
+        return detectedLang;
+      } catch (error) {
+        console.error('Error in language detection:', error);
+        return 'unknown';
+      }
     });
+    
+    // Store the promise globally so save functions can wait for it
+    window.currentLanguageDetectionPromise = languageDetectionPromise;
 
     const centerWrap = document.createElement('div');
     centerWrap.style.display = 'flex';

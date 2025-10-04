@@ -1,209 +1,616 @@
 (() => {
-  const wordsEl = document.getElementById('words');
-  const translationEl = document.getElementById('translation');
-  const controlsEl = document.getElementById('controls');
+  const urlDropdown = document.getElementById('urlDropdown');
+  const wordsList = document.getElementById('wordsList');
+  const emptyState = document.getElementById('emptyState');
+  
+  let savedWords = [];
+  let currentFilter = 'all';
+  let isRefreshing = false;
+  let hasMigrated = false;
+  
+  // Practice mode variables
+  let practiceWords = [];
+  let currentQuestionIndex = 0;
+  let correctAnswers = 0;
+  let practiceMode = 'source-to-target'; // or 'target-to-source'
 
-  let selectedWords = [];
-  let isDragging = false;
-  let selectionStartIndex = null;
-  let wordOrder = [];
-  const translatorCache = new Map();
-  let languageDetectorPromise = null;
-
-  function setTranslationLoading(msg) {
-    translationEl.textContent = msg || 'Translating…';
-  }
-
-  function setTranslation(text) {
-    translationEl.textContent = text || 'Translation not available.';
-  }
-
-  function buildControls(detected) {
-    controlsEl.innerHTML = '';
-    const lang = document.createElement('button');
-    lang.className = 'btn-lang';
-    lang.textContent = detected || 'unknown';
-
-    const center = document.createElement('div');
-    center.style.display = 'flex';
-    center.style.justifyContent = 'center';
-    center.style.gap = '8px';
-    const ask = document.createElement('button');
-    ask.className = 'btn btn-primary';
-    ask.textContent = 'Ask me a question';
-    const grammar = document.createElement('button');
-    grammar.className = 'btn btn-secondary';
-    grammar.textContent = 'Explain Grammar';
-    center.appendChild(ask);
-    center.appendChild(grammar);
-
-    const openPopup = document.createElement('button');
-    openPopup.className = 'btn btn-secondary';
-    openPopup.textContent = 'Open in popup';
-    openPopup.addEventListener('click', () => {
-      chrome.runtime.sendMessage({ type: 'WEBLANG_SET_PREFER_SIDEBAR', preferSidebar: false });
-    });
-
-    controlsEl.appendChild(openPopup);
-    controlsEl.appendChild(center);
-    controlsEl.appendChild(lang);
-  }
-
-  async function getLanguageDetector(onProgress) {
-    if (!('LanguageDetector' in self)) return null;
-    if (languageDetectorPromise) return languageDetectorPromise;
-    languageDetectorPromise = (async () => {
-      try {
-        if (typeof self.LanguageDetector.availability === 'function') {
-          try { await self.LanguageDetector.availability(); } catch {}
-        }
-        const det = await self.LanguageDetector.create({
-          monitor(m) {
-            if (!m || typeof m.addEventListener !== 'function') return;
-            m.addEventListener('downloadprogress', (e) => {
-              try { onProgress && onProgress(`Preparing language model… ${Math.round((e.loaded||0)*100)}%`); } catch {}
-            });
-          }
-        });
-        return det;
-      } catch { return null; }
-    })();
-    return languageDetectorPromise;
-  }
-
-  async function detectLanguageCode(text, onProgress) {
-    try {
-      const det = await getLanguageDetector(onProgress);
-      if (!det) return 'unknown';
-      const results = await det.detect(String(text||''));
-      if (Array.isArray(results) && results.length > 0) {
-        const top = results[0];
-        if (top && top.detectedLanguage) return top.detectedLanguage;
-      }
-      return 'unknown';
-    } catch { return 'unknown'; }
-  }
-
-  async function getTranslator(sourceLanguage, targetLanguage, onProgress) {
-    if (!('Translator' in self)) return null;
-    const key = `${sourceLanguage}-${targetLanguage}`;
-    if (translatorCache.has(key)) return translatorCache.get(key);
-    const promise = (async () => {
-      try {
-        if (typeof self.Translator.availability === 'function') {
-          try { await self.Translator.availability({ sourceLanguage, targetLanguage }); } catch {}
-        }
-        const translator = await self.Translator.create({
-          sourceLanguage,
-          targetLanguage,
-          monitor(m) {
-            if (!m || typeof m.addEventListener !== 'function') return;
-            m.addEventListener('downloadprogress', (e) => {
-              try { onProgress && onProgress(`Downloading translation model… ${Math.round((e.loaded||0)*100)}%`); } catch {}
-            });
-          }
-        });
-        return translator;
-      } catch { return null; }
-    })();
-    translatorCache.set(key, promise);
-    return promise;
-  }
-
-  async function translate(text, targetLang = 'en', onProgress) {
-    try {
-      const detected = await detectLanguageCode(text, onProgress);
-      const translator = await getTranslator(detected || 'auto', targetLang, onProgress);
-      if (!translator) return null;
-      const result = await translator.translate(text);
-      return typeof result === 'string' ? result : (result && (result.translation || result.translatedText || ''));
-    } catch { return null; }
-  }
-
-  function renderClickableWords(text) {
-    wordsEl.innerHTML = '';
-    selectedWords = [];
-    isDragging = false;
-    selectionStartIndex = null;
-    wordOrder = [];
-    const parts = String(text||'').split(/(\s+)/);
-    parts.forEach((part) => {
-      if (part.trim() === '') { wordsEl.appendChild(document.createTextNode(part)); return; }
-      const cleanWord = part.replace(/[^\w\s'-]/g, '').trim();
-      const span = document.createElement('span');
-      span.textContent = part;
-      span.style.cursor = 'pointer';
-      span.style.transition = 'color 150ms ease-in-out, background 150ms ease-in-out';
-      span.style.borderBottom = '1px dashed rgba(156,163,175,0.6)';
-      span.style.display = 'inline-block';
-      span.style.padding = '0 2px';
-      const currentIndex = wordOrder.length;
-      if (cleanWord) wordOrder.push({ word: cleanWord, span });
-      span.addEventListener('mousedown', (e) => {
-        e.preventDefault(); e.stopPropagation(); if (!cleanWord) return;
-        isDragging = true; selectedWords = [cleanWord]; selectionStartIndex = currentIndex;
-        highlightSelection([span]);
-      });
-      span.addEventListener('mouseenter', (e) => {
-        if (!isDragging || selectionStartIndex === null) return; e.preventDefault(); e.stopPropagation();
-        const min = Math.min(selectionStartIndex, currentIndex); const max = Math.max(selectionStartIndex, currentIndex);
-        const seq = wordOrder.slice(min, max+1);
-        selectedWords = seq.map(w=>w.word);
-        highlightSelection(seq.map(w=>w.span));
-      });
-      wordsEl.appendChild(span);
-    });
-  }
-
-  function clearHighlights() {
-    wordOrder.forEach(({ span }) => { span.style.background = ''; span.style.color = ''; span.style.borderBottom = '1px dashed rgba(156,163,175,0.6)'; });
-  }
-  function highlightSelection(spans) {
-    clearHighlights();
-    spans.forEach((s) => { s.style.background = '#2563eb'; s.style.color = '#fff'; s.style.borderBottom = 'none'; s.style.borderRadius = '4px'; });
-  }
-
-  document.addEventListener('mouseup', async () => {
-    if (!isDragging) return; isDragging = false;
-    if (selectedWords.length === 0) return;
-    const text = selectedWords.join(' ');
-    buildControls('detecting…');
-    setTranslationLoading('Translating…');
-    const res = await translate(text, 'en', (msg)=>{ try { setTranslationLoading(msg); } catch {} });
-    setTranslation(res || 'Translation not available.');
-    const lang = await detectLanguageCode(text);
-    buildControls(lang || 'unknown');
-  });
-
-  function setWords(text) {
-    renderClickableWords(text || '');
-  }
-
-  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    if (msg && msg.type === 'WEBLANG_SIDEBAR_SELECTION') {
-      const { text } = msg;
-      setWords(text || '');
-      buildControls('detecting…');
-      setTranslation('');
+  // Initialize the sidebar
+  async function init() {
+    console.log('Initializing sidebar...');
+    console.log('DOM elements:', { urlDropdown, wordsList, emptyState });
+    
+    if (!urlDropdown || !wordsList || !emptyState) {
+      console.error('Required DOM elements not found');
+      return;
     }
-  });
+    
+    await loadSavedWords();
+    setupEventListeners();
+    updateDisplay();
+  }
 
-  // Mark preference so subsequent selections route to sidebar
-  try {
-    chrome.runtime && chrome.runtime.sendMessage({ type: 'WEBLANG_SET_PREFER_SIDEBAR', preferSidebar: true });
-  } catch {}
+  // Refresh words from storage (useful when sidebar reopens)
+  async function refreshWords() {
+    if (isRefreshing) {
+      console.log('Already refreshing, skipping...');
+      return;
+    }
+    
+    isRefreshing = true;
+    console.log('Refreshing words from storage...');
+    await loadSavedWords();
+    updateDisplay();
+    isRefreshing = false;
+  }
 
-  // On load, try to fetch last selection from storage
-  try {
-    chrome.storage && chrome.storage.local && chrome.storage.local.get(['weblangSidebarSelection'], (res) => {
-      const sel = res && res.weblangSidebarSelection;
-      if (sel && sel.text) {
-        setWords(sel.text);
-        buildControls('detecting…');
-        setTranslation('');
+  // Load saved words from storage
+  async function loadSavedWords() {
+    try {
+      const result = await chrome.storage.local.get(['langlabSavedWords']);
+      console.log('Storage result:', result);
+      savedWords = result.langlabSavedWords || [];
+      
+      // Also check if there are any words in the old storage format
+      const allStorage = await chrome.storage.local.get();
+      console.log('All storage keys:', Object.keys(allStorage));
+      
+      // Migrate words from old storage format if needed (only once)
+      if (!hasMigrated) {
+        await migrateOldWords(allStorage);
+        hasMigrated = true;
+      }
+      
+      updateUrlDropdown();
+      console.log('Loaded saved words:', savedWords.length);
+    } catch (error) {
+      console.error('Error loading saved words:', error);
+      savedWords = [];
+    }
+  }
+
+  // Migrate words from old storage format
+  async function migrateOldWords(allStorage) {
+    const oldWords = [];
+    
+    // Look for old vocabulary storage keys
+    Object.keys(allStorage).forEach(key => {
+      if (key.startsWith('weblang_vocab_')) {
+        const vocab = allStorage[key];
+        if (Array.isArray(vocab)) {
+          vocab.forEach(word => {
+            if (word.word && word.url && word.translation) {
+              // Check if this word already exists in savedWords
+              const exists = savedWords.some(savedWord => 
+                savedWord.word.toLowerCase() === word.word.toLowerCase() && 
+                savedWord.url === word.url
+              );
+              
+              if (!exists) {
+                oldWords.push({
+                  id: `${word.url}-${word.word}-${word.savedAt || Date.now()}-migrated`,
+                  word: word.word,
+                  translation: word.translation,
+                  url: word.url,
+                  title: word.url,
+                  timestamp: word.savedAt || word.lastSaved || Date.now(),
+                  domain: getDomainFromUrl(word.url)
+                });
+              }
+            }
+          });
+        }
       }
     });
-  } catch {}
+
+    if (oldWords.length > 0) {
+      console.log('Found old words to migrate:', oldWords.length);
+      savedWords.push(...oldWords);
+      await saveWords();
+      console.log('Migrated old words to new format');
+    }
+  }
+
+  // Save words to storage
+  async function saveWords() {
+    try {
+      await chrome.storage.local.set({ langlabSavedWords: savedWords });
+    } catch (error) {
+      console.error('Error saving words:', error);
+    }
+  }
+
+  // Update URL dropdown with unique URLs
+  function updateUrlDropdown() {
+    const urls = [...new Set(savedWords.map(word => word.url))];
+    const currentValue = urlDropdown.value;
+    
+    // Clear existing options except "All Pages"
+    urlDropdown.innerHTML = '<option value="all">All Pages</option>';
+    
+    // Add URL options with full URLs
+    urls.forEach(url => {
+      const option = document.createElement('option');
+      option.value = url;
+      option.textContent = url; // Show full URL
+      urlDropdown.appendChild(option);
+    });
+    
+    // Restore selection if it still exists
+    if (urls.includes(currentValue)) {
+      urlDropdown.value = currentValue;
+      currentFilter = currentValue;
+    } else {
+      urlDropdown.value = 'all';
+      currentFilter = 'all';
+    }
+  }
+
+  // Extract domain from URL
+  function getDomainFromUrl(url) {
+    try {
+      const urlObj = new URL(url);
+      return urlObj.hostname;
+    } catch {
+      return url;
+    }
+  }
+
+  // Setup event listeners
+  function setupEventListeners() {
+    urlDropdown.addEventListener('change', (e) => {
+      currentFilter = e.target.value;
+      updateDisplay();
+    });
+
+    // Refresh button
+    const refreshBtn = document.getElementById('refreshBtn');
+    refreshBtn.addEventListener('click', refreshWords);
+
+    // Clear all button
+    const clearAllBtn = document.getElementById('clearAllBtn');
+    clearAllBtn.addEventListener('click', clearAllWords);
+
+    // Practice button
+    const practiceBtn = document.getElementById('practiceBtn');
+    practiceBtn.addEventListener('click', startPractice);
+
+    // Practice modal event listeners
+    const practiceModal = document.getElementById('practiceModal');
+    const practiceCloseBtn = document.getElementById('practiceCloseBtn');
+    const closeResultBtn = document.getElementById('closeResultBtn');
+    const restartBtn = document.getElementById('restartBtn');
+
+    practiceCloseBtn.addEventListener('click', closePractice);
+    closeResultBtn.addEventListener('click', closePractice);
+    restartBtn.addEventListener('click', startPractice);
+
+    // Listen for visibility changes to refresh when sidebar becomes visible
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        console.log('Sidebar became visible, refreshing words...');
+        refreshWords();
+      }
+    });
+
+    // Also listen for focus events as a backup
+    window.addEventListener('focus', () => {
+      console.log('Sidebar window focused, refreshing words...');
+      refreshWords();
+    });
+
+    // Listen for storage changes to refresh when words are added from other tabs
+    let storageChangeTimeout;
+    chrome.storage.onChanged.addListener((changes, namespace) => {
+      if (namespace === 'local' && changes.langlabSavedWords && !isRefreshing) {
+        console.log('Storage changed, scheduling refresh...');
+        // Debounce the refresh to prevent rapid successive calls
+        clearTimeout(storageChangeTimeout);
+        storageChangeTimeout = setTimeout(() => {
+          refreshWords();
+        }, 100);
+      }
+    });
+
+  }
+
+
+
+  // Update the main display
+  function updateDisplay() {
+    console.log('updateDisplay called - savedWords:', savedWords.length, 'currentFilter:', currentFilter);
+    const filteredWords = currentFilter === 'all' 
+      ? savedWords 
+      : savedWords.filter(word => word.url === currentFilter);
+
+    console.log('filteredWords:', filteredWords.length);
+
+    if (filteredWords.length === 0) {
+      showEmptyState();
+      return;
+    }
+
+    hideEmptyState();
+    renderWords(filteredWords);
+  }
+
+  // Show empty state
+  function showEmptyState() {
+    emptyState.style.display = 'block';
+    wordsList.innerHTML = '';
+  }
+
+  // Hide empty state
+  function hideEmptyState() {
+    emptyState.style.display = 'none';
+  }
+
+  // Render words in a table grouped by URL
+  function renderWords(words) {
+    wordsList.innerHTML = '';
+    
+    if (words.length === 0) {
+      showEmptyState();
+      return;
+    }
+
+    // If filtering by specific URL, show simple table without URL headers
+    if (currentFilter !== 'all') {
+      renderSimpleTable(words);
+      return;
+    }
+
+    // Group words by URL for "All" view
+    const groupedWords = words.reduce((groups, word) => {
+      if (!groups[word.url]) {
+        groups[word.url] = {
+          url: word.url,
+          words: []
+        };
+      }
+      groups[word.url].words.push(word);
+      return groups;
+    }, {});
+
+    // Sort groups by most recent first
+    const sortedGroups = Object.values(groupedWords).sort((a, b) => {
+      const aLatest = Math.max(...a.words.map(w => w.timestamp));
+      const bLatest = Math.max(...b.words.map(w => w.timestamp));
+      return bLatest - aLatest;
+    });
+
+    // Render each group
+    sortedGroups.forEach(group => {
+      const groupEl = createUrlGroup(group);
+      wordsList.appendChild(groupEl);
+    });
+  }
+
+  // Render simple table without URL headers (for specific URL filter)
+  function renderSimpleTable(words) {
+    // Sort words by timestamp (newest first)
+    const sortedWords = words.sort((a, b) => b.timestamp - a.timestamp);
+
+    // Create table
+    const table = document.createElement('table');
+    table.className = 'words-table';
+    
+    // Create header
+    const thead = document.createElement('thead');
+    thead.innerHTML = `
+      <tr>
+        <th>Word</th>
+        <th>Translation</th>
+        <th>Language</th>
+        <th>Time</th>
+        <th></th>
+      </tr>
+    `;
+    table.appendChild(thead);
+
+    // Create body
+    const tbody = document.createElement('tbody');
+    sortedWords.forEach(word => {
+      const row = createWordRow(word);
+      tbody.appendChild(row);
+    });
+    table.appendChild(tbody);
+
+    wordsList.appendChild(table);
+  }
+
+  // Create URL group element
+  function createUrlGroup(group) {
+    const groupEl = document.createElement('div');
+    groupEl.className = 'url-group';
+    groupEl.style.marginBottom = '24px';
+
+    // URL header
+    const headerEl = document.createElement('div');
+    headerEl.style.cssText = `
+      background: rgba(31,41,55,0.5);
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      border-left: 3px solid #2563eb;
+    `;
+    headerEl.innerHTML = `
+      <div style="color: #60a5fa; font-weight: 500; font-size: 13px;">${group.url}</div>
+      <div style="color: rgba(229,231,235,0.6); font-size: 11px; margin-top: 2px;">${group.words.length} word${group.words.length !== 1 ? 's' : ''}</div>
+    `;
+    groupEl.appendChild(headerEl);
+
+    // Create table for words
+    const table = document.createElement('table');
+    table.className = 'words-table';
+    
+    // Create header
+    const thead = document.createElement('thead');
+    thead.innerHTML = `
+      <tr>
+        <th>Word</th>
+        <th>Translation</th>
+        <th>Language</th>
+        <th>Time</th>
+        <th></th>
+      </tr>
+    `;
+    table.appendChild(thead);
+
+    // Create body
+    const tbody = document.createElement('tbody');
+    // Sort words by timestamp (newest first)
+    const sortedWords = group.words.sort((a, b) => b.timestamp - a.timestamp);
+    sortedWords.forEach(word => {
+      const row = createWordRow(word);
+      tbody.appendChild(row);
+    });
+    table.appendChild(tbody);
+
+    groupEl.appendChild(table);
+    return groupEl;
+  }
+
+  // Create word row element
+  function createWordRow(word) {
+    const row = document.createElement('tr');
+    row.setAttribute('data-word-id', word.id);
+    
+    const timeAgo = getTimeAgo(word.timestamp);
+    const language = word.sourceLanguage || 'unknown';
+    
+    row.innerHTML = `
+      <td class="word-text">${word.word}</td>
+      <td class="word-translation">${word.translation || 'Translation not available'}</td>
+      <td class="word-language">${language}</td>
+      <td class="word-time">${timeAgo}</td>
+      <td class="word-actions">
+        <button class="remove-btn" data-word-id="${word.id}">Remove</button>
+      </td>
+    `;
+
+    // Add click listener for remove button
+    const removeBtn = row.querySelector('.remove-btn');
+    removeBtn.addEventListener('click', () => removeWord(word.id));
+
+    return row;
+  }
+
+
+  // Get time ago string
+  function getTimeAgo(timestamp) {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    return `${days}d ago`;
+  }
+
+  // Remove word from storage
+  function removeWord(wordId) {
+    savedWords = savedWords.filter(word => word.id !== wordId);
+    saveWords();
+    updateUrlDropdown();
+    updateDisplay();
+  }
+
+  // Clear all words
+  function clearAllWords() {
+    if (confirm('Are you sure you want to clear all saved words?')) {
+      savedWords = [];
+      saveWords();
+      updateUrlDropdown();
+      updateDisplay();
+    }
+  }
+
+
+  // Practice mode functions
+  function startPractice() {
+    const filteredWords = currentFilter === 'all' 
+      ? savedWords 
+      : savedWords.filter(word => word.url === currentFilter);
+
+    if (filteredWords.length === 0) {
+      alert('No words available for practice. Please save some words first.');
+      return;
+    }
+
+    // Initialize practice session
+    practiceWords = [...filteredWords];
+    currentQuestionIndex = 0;
+    correctAnswers = 0;
+    practiceMode = Math.random() < 0.5 ? 'source-to-target' : 'target-to-source';
+
+    // Show practice modal
+    const practiceModal = document.getElementById('practiceModal');
+    practiceModal.style.display = 'flex';
+
+    // Start first question
+    showQuestion();
+  }
+
+  function closePractice() {
+    const practiceModal = document.getElementById('practiceModal');
+    practiceModal.style.display = 'none';
+    
+    // Hide both question and result sections
+    document.getElementById('practiceQuestion').style.display = 'none';
+    document.getElementById('practiceResult').style.display = 'none';
+  }
+
+  function showQuestion() {
+    if (currentQuestionIndex >= practiceWords.length) {
+      showResults();
+      return;
+    }
+
+    const currentWord = practiceWords[currentQuestionIndex];
+    const questionEl = document.getElementById('practiceQuestion');
+    const resultEl = document.getElementById('practiceResult');
+    
+    // Show question, hide result
+    questionEl.style.display = 'block';
+    resultEl.style.display = 'none';
+
+    // Update progress
+    updateProgress();
+
+    // Generate question and options
+    const { question, correctAnswer, options } = generateQuestion(currentWord);
+    
+    // Update question text
+    document.getElementById('questionText').textContent = question;
+    document.getElementById('questionHint').textContent = practiceMode === 'source-to-target' 
+      ? `What does "${currentWord.word}" mean?` 
+      : `What is the translation of "${currentWord.translation}"?`;
+
+    // Create options
+    const optionsContainer = document.getElementById('practiceOptions');
+    optionsContainer.innerHTML = '';
+    
+    options.forEach((option, index) => {
+      const optionBtn = document.createElement('button');
+      optionBtn.className = 'option-btn';
+      optionBtn.textContent = option;
+      optionBtn.addEventListener('click', () => selectAnswer(option, correctAnswer, optionBtn));
+      optionsContainer.appendChild(optionBtn);
+    });
+  }
+
+  function generateQuestion(word) {
+    const isSourceToTarget = practiceMode === 'source-to-target';
+    const correctAnswer = isSourceToTarget ? word.translation : word.word;
+    const question = isSourceToTarget ? word.word : word.translation;
+
+    // Get other words for wrong options
+    const otherWords = practiceWords.filter(w => w !== word);
+    const wrongOptions = [];
+    
+    // Get 3 random wrong options
+    while (wrongOptions.length < 3 && wrongOptions.length < otherWords.length) {
+      const randomWord = otherWords[Math.floor(Math.random() * otherWords.length)];
+      const wrongOption = isSourceToTarget ? randomWord.translation : randomWord.word;
+      
+      if (wrongOption && wrongOption !== correctAnswer && !wrongOptions.includes(wrongOption)) {
+        wrongOptions.push(wrongOption);
+      }
+    }
+
+    // If we don't have enough wrong options, add some generic ones
+    while (wrongOptions.length < 3) {
+      const genericOptions = isSourceToTarget 
+        ? ['Unknown', 'Not sure', 'Maybe', 'Possibly', 'Perhaps']
+        : ['Unknown', 'Not sure', 'Maybe', 'Possibly', 'Perhaps'];
+      
+      const randomGeneric = genericOptions[Math.floor(Math.random() * genericOptions.length)];
+      if (!wrongOptions.includes(randomGeneric)) {
+        wrongOptions.push(randomGeneric);
+      }
+    }
+
+    // Combine correct and wrong options and shuffle
+    const allOptions = [correctAnswer, ...wrongOptions.slice(0, 3)];
+    const shuffledOptions = allOptions.sort(() => Math.random() - 0.5);
+
+    return {
+      question,
+      correctAnswer,
+      options: shuffledOptions
+    };
+  }
+
+  function selectAnswer(selectedAnswer, correctAnswer, buttonElement) {
+    // Disable all options
+    const allButtons = document.querySelectorAll('.option-btn');
+    allButtons.forEach(btn => {
+      btn.classList.add('disabled');
+      btn.style.cursor = 'not-allowed';
+    });
+
+    // Mark correct/incorrect
+    allButtons.forEach(btn => {
+      if (btn.textContent === correctAnswer) {
+        btn.classList.add('correct');
+      } else if (btn.textContent === selectedAnswer && selectedAnswer !== correctAnswer) {
+        btn.classList.add('incorrect');
+      }
+    });
+
+    // Update score
+    if (selectedAnswer === correctAnswer) {
+      correctAnswers++;
+    }
+
+    // Move to next question after a delay
+    setTimeout(() => {
+      currentQuestionIndex++;
+      showQuestion();
+    }, 2000);
+  }
+
+  function updateProgress() {
+    const progress = ((currentQuestionIndex + 1) / practiceWords.length) * 100;
+    document.getElementById('progressFill').style.width = `${progress}%`;
+    document.getElementById('progressText').textContent = 
+      `Question ${currentQuestionIndex + 1} of ${practiceWords.length}`;
+  }
+
+  function showResults() {
+    const questionEl = document.getElementById('practiceQuestion');
+    const resultEl = document.getElementById('practiceResult');
+    
+    // Hide question, show result
+    questionEl.style.display = 'none';
+    resultEl.style.display = 'block';
+
+    // Calculate score
+    const percentage = Math.round((correctAnswers / practiceWords.length) * 100);
+    const scoreText = document.getElementById('resultScore');
+    const resultText = document.getElementById('resultText');
+
+    scoreText.textContent = `${correctAnswers}/${practiceWords.length} (${percentage}%)`;
+    
+    if (percentage >= 80) {
+      scoreText.style.color = '#22c55e';
+      resultText.textContent = 'Excellent work! You\'re mastering these words!';
+    } else if (percentage >= 60) {
+      scoreText.style.color = '#f59e0b';
+      resultText.textContent = 'Good job! Keep practicing to improve further.';
+    } else {
+      scoreText.style.color = '#ef4444';
+      resultText.textContent = 'Keep practicing! Review the words and try again.';
+    }
+  }
+
+  // Initialize when DOM is loaded
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();
-
-
