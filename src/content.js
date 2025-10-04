@@ -328,6 +328,32 @@
     popupBodyRef = null;
   }
 
+  function repositionPopupForSidebar() {
+    if (!popupEl) return;
+    
+    // Get current popup position
+    const rect = popupEl.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const sidebarWidth = 400; // Approximate sidebar width
+    
+    // Check if popup is on the right side and might overlap with sidebar
+    const isOnRightSide = rect.left > viewportWidth / 2;
+    
+    if (isOnRightSide) {
+      // Move popup to the left to avoid sidebar overlap
+      const newLeft = Math.max(20, viewportWidth - sidebarWidth - rect.width - 20);
+      popupEl.style.left = `${newLeft}px`;
+      
+      // Add a subtle animation
+      popupEl.style.transition = 'left 0.3s ease';
+      setTimeout(() => {
+        if (popupEl) {
+          popupEl.style.transition = '';
+        }
+      }, 300);
+    }
+  }
+
   function ensureBackdrop() {
     const container = ensureContainer();
     if (backdropEl && container.contains(backdropEl)) return backdropEl;
@@ -1295,11 +1321,38 @@
 
     centerWrap.appendChild(btnAsk);
 
-    // Sidebar control removed
+    // Add View Vocabulary button to the right side
+    const btnVocab = document.createElement('button');
+    btnVocab.classList.add(`${EXT_CLS_PREFIX}-btn-vocab`);
+    secondaryBtnStyles(btnVocab);
+    btnVocab.textContent = '📚 Vocab';
+    btnVocab.addEventListener('click', async () => {
+      try {
+        // Open the sidebar
+        await chrome.runtime.sendMessage({ type: 'OPEN_SIDEBAR' });
+        
+        // Reposition popup to avoid sidebar overlap
+        if (popupEl) {
+          repositionPopupForSidebar();
+        }
+      } catch (error) {
+        console.error('Failed to open sidebar:', error);
+        // Fallback: try to open sidebar directly
+        try {
+          await chrome.sidePanel.open();
+          if (popupEl) {
+            repositionPopupForSidebar();
+          }
+        } catch (fallbackError) {
+          console.error('Fallback sidebar open also failed:', fallbackError);
+        }
+      }
+    });
 
-    // Order swap in sidebar: rightBtn on left? Spec says swap positions of language and open button
+    // Order: language button (left), center content, vocab button (right)
     bar.appendChild(langBtn);
     bar.appendChild(centerWrap);
+    bar.appendChild(btnVocab);
     return bar;
   }
 

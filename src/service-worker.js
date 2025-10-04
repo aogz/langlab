@@ -23,6 +23,24 @@ chrome.action.onClicked.addListener(async (tab) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || !sender) return;
   
+  if (message.type === 'OPEN_SIDEBAR') {
+    const tabId = sender.tab && sender.tab.id;
+    if (!tabId) {
+      sendResponse({ success: false, error: 'No tab ID' });
+      return;
+    }
+    
+    // Open the sidebar for the current tab
+    chrome.sidePanel.open({ tabId: tabId })
+      .then(() => {
+        sendResponse({ success: true });
+      })
+      .catch((error) => {
+        console.error('Failed to open sidebar:', error);
+        sendResponse({ success: false, error: error.message });
+      });
+    return true; // Keep the message channel open for async response
+  }
   
   if (message.type === 'WEBLANG_PROMPT_REQUEST') {
     const tabId = sender.tab && sender.tab.id;
