@@ -244,6 +244,12 @@
         weblangSetupCompleted: true,
         weblangSetupDate: Date.now()
       }, () => {
+        // Notify other parts of the extension that language settings have been updated
+        try {
+          chrome.runtime.sendMessage({ type: 'LANGUAGE_SETTINGS_UPDATED' });
+        } catch (error) {
+          console.warn('Failed to notify language settings update:', error);
+        }
         showStatus('Saved');
       });
     } catch {}

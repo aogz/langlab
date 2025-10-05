@@ -27,6 +27,7 @@
     await loadSavedWords();
     await loadSetupStatus();
     setupEventListeners();
+    setupStorageListener();
     updateDisplay();
   }
 
@@ -126,6 +127,28 @@
       });
     } catch (error) {
       console.error('Failed to open setup page:', error);
+    }
+  }
+
+  // Setup storage change listener to update sidebar when settings change
+  function setupStorageListener() {
+    if (chrome.storage && chrome.storage.onChanged) {
+      chrome.storage.onChanged.addListener((changes, namespace) => {
+        if (namespace === 'local') {
+          // Check if language settings were updated
+          if (changes.weblangUserLang || changes.weblangLearnLang || changes.weblangSetupCompleted) {
+            console.log('Language settings updated, refreshing sidebar...');
+            // Reload setup status to reflect new settings
+            loadSetupStatus();
+          }
+          
+          // Check if saved words were updated
+          if (changes.langlabSavedWords) {
+            console.log('Saved words updated, refreshing display...');
+            refreshWords();
+          }
+        }
+      });
     }
   }
 

@@ -112,6 +112,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } catch (e) {}
     })();
   }
+  
+  if (message.type === 'OPEN_OPTIONS') {
+    try {
+      chrome.runtime.openOptionsPage();
+    } catch (error) {
+      console.error('Failed to open options page:', error);
+    }
+  }
+  
+  if (message.type === 'LANGUAGE_SETTINGS_UPDATED') {
+    // Notify all content scripts that language settings have changed
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        if (tab.id) {
+          chrome.tabs.sendMessage(tab.id, { type: 'RELOAD_LANGUAGE_SETTINGS' }).catch(() => {
+            // Ignore errors for tabs that don't have the content script
+          });
+        }
+      });
+    });
+  }
 });
 
 

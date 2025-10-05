@@ -220,8 +220,28 @@
     });
   }
 
-  // Auto-detect user's language preference
+  // Load existing settings from storage
+  async function loadExistingSettings() {
+    try {
+      const result = await chrome.storage.local.get(['weblangUserLang', 'weblangLearnLang']);
+      
+      if (result.weblangUserLang) {
+        nativeSelect.value = result.weblangUserLang;
+      }
+      
+      if (result.weblangLearnLang) {
+        learningSelect.value = result.weblangLearnLang;
+      }
+    } catch (error) {
+      console.warn('Failed to load existing settings:', error);
+    }
+  }
+
+  // Auto-detect user's language preference (only if no existing settings)
   function detectUserLanguage() {
+    // Only auto-detect if no existing settings are loaded
+    if (nativeSelect.value) return;
+    
     const browserLang = navigator.language.split('-')[0];
     const detectedLang = languages.find(lang => lang.code === browserLang);
     
@@ -246,6 +266,12 @@
         weblangSetupCompleted: true,
         weblangSetupDate: Date.now()
       }, () => {
+        // Notify other parts of the extension that language settings have been updated
+        try {
+          chrome.runtime.sendMessage({ type: 'LANGUAGE_SETTINGS_UPDATED' });
+        } catch (error) {
+          console.warn('Failed to notify language settings update:', error);
+        }
         resolve();
       });
     });
@@ -304,11 +330,14 @@
   }
 
   // Initialize the setup page
-  function init() {
+  async function init() {
     populateLanguageSelect(nativeSelect, 'Select your native language');
     populateLanguageSelect(learningSelect, 'Select language to learn');
     
-    // Auto-detect user's language
+    // Load existing settings first
+    await loadExistingSettings();
+    
+    // Auto-detect user's language only if no existing settings
     detectUserLanguage();
     
     // Add event listeners

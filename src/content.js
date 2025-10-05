@@ -1167,10 +1167,10 @@
     }
     
     // Pick a keyword: longest word over 6 chars, else first word
-    const words = t.replace(/[^\w\s'-]/g, ' ').split(/\s+/).filter(Boolean);
+    const words = t.replace(/[^\p{L}\p{N}\s'-]/gu, ' ').split(/\s+/).filter(Boolean);
     let keyword = words.find(w => w.length >= 8) || words.find(w => w.length >= 6) || words[0] || '';
     // Prefer a capitalized content word if available
-    const cap = words.find(w => /^[A-Z][a-z]+$/.test(w));
+    const cap = words.find(w => /^\p{Lu}\p{Ll}+$/u.test(w));
     if (cap) keyword = cap;
     
     // Choose a question template based on text length and existing questions
@@ -1737,7 +1737,7 @@
       if (part.trim() === '') {
         container.appendChild(document.createTextNode(part));
       } else {
-        const cleanWord = part.replace(/[^\w\s'-]/g, '').trim();
+        const cleanWord = part.replace(/[^\p{L}\p{N}\s'-]/gu, '').trim();
         const span = document.createElement('span');
         span.className = `${EXT_CLS_PREFIX}-word`;
         span.textContent = part;
@@ -1878,6 +1878,16 @@
     e.stopPropagation();
     await openOverlayForElement(el, null);
   }
+
+  // Listen for language settings updates
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === 'RELOAD_LANGUAGE_SETTINGS') {
+      console.log('Language settings updated, re-evaluating paragraphs...');
+      // Clear existing clickable nodes and re-evaluate
+      clickableNodes.clear();
+      makeClickableParagraphs();
+    }
+  });
 
   // Initialize
   addClickableStyles();
