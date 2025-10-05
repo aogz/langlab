@@ -36,7 +36,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["page-prompt.js"],
+      "resources": ["page-prompt.js", "setup.html"],
       "matches": ["<all_urls>"]
     }
   ]

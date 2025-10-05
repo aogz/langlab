@@ -340,12 +340,56 @@
     .action-btn:hover { 
       opacity: 0.8; 
     }
+    
+    /* Setup Status Styles */
+    .setup-status {
+      background: rgba(31,41,55,0.6);
+      border: 1px solid rgba(75,85,99,0.7);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+    .setup-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .setup-languages {
+      font-size: 14px;
+      color: #e5e7eb;
+      font-weight: 500;
+    }
+    .setup-change-btn {
+      background: rgba(37,99,235,0.1);
+      color: #60a5fa;
+      border: 1px solid rgba(37,99,235,0.3);
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s ease;
+    }
+    .setup-change-btn:hover {
+      background: rgba(37,99,235,0.2);
+      border-color: #2563eb;
+    }
       </style>
     </head>
     <body>
   <div class="wrap">
     <div class="header">
       <div class="title">Saved Words</div>
+      
+      <!-- Setup Status Section -->
+      <div id="setupStatus" class="setup-status" style="display: none;">
+        <div class="setup-info">
+          <div class="setup-languages">
+            <span id="setupNativeLang">English</span> → <span id="setupLearningLang">Spanish</span>
+          </div>
+          <button id="setupChangeBtn" class="setup-change-btn" title="Change language settings">⚙️</button>
+        </div>
+      </div>
+      
       <div class="url-selector">
         <select id="urlDropdown" class="url-dropdown">
           <option value="all">All Pages</option>

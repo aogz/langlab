@@ -74,21 +74,16 @@
     { code: 'gl', name: 'Galician', flag: '🇪🇸' }
   ];
 
-  const userLangEl = document.getElementById('userLang');
-  const learnLangEl = document.getElementById('learnLang');
+  const nativeSelect = document.getElementById('nativeLanguage');
+  const learningSelect = document.getElementById('learningLanguage');
+  const setupForm = document.getElementById('setupForm');
   const saveBtn = document.getElementById('saveBtn');
-  const resetBtn = document.getElementById('resetBtn');
-  const statusEl = document.getElementById('status');
+  const skipBtn = document.getElementById('skipBtn');
+  const availabilityStatus = document.getElementById('availabilityStatus');
 
   // Check if Translator API is supported
   const isTranslatorSupported = 'Translator' in self;
   let supportedLanguagePairs = new Map();
-
-  function showStatus(msg) {
-    statusEl.textContent = msg || '';
-    if (!msg) return;
-    setTimeout(() => { statusEl.textContent = ''; }, 1500);
-  }
 
   // Check if a language pair is supported by the Translator API
   async function checkLanguagePairAvailability(sourceLang, targetLang) {
@@ -119,24 +114,25 @@
 
   // Update learning language options based on native language selection
   async function updateLearningLanguageOptions() {
-    const selectedNativeLang = userLangEl.value;
-    const currentLearningLang = learnLangEl.value;
+    const selectedNativeLang = nativeSelect.value;
+    const currentLearningLang = learningSelect.value;
     
     if (!selectedNativeLang) {
       // Reset to all languages
-      learnLangEl.innerHTML = '<option value="">Select language to learn</option>';
+      learningSelect.innerHTML = '<option value="">Select language to learn</option>';
       languages.forEach(lang => {
         const option = document.createElement('option');
         option.value = lang.code;
         option.textContent = `${lang.flag} ${lang.name}`;
-        learnLangEl.appendChild(option);
+        learningSelect.appendChild(option);
       });
       return;
     }
 
     // Show loading state
-    learnLangEl.innerHTML = '<option value="">Checking available languages...</option>';
-    learnLangEl.disabled = true;
+    learningSelect.innerHTML = '<option value="">Checking available languages...</option>';
+    learningSelect.disabled = true;
+    availabilityStatus.style.display = 'block';
 
     try {
       // Check availability for each language pair
@@ -150,7 +146,7 @@
       const results = await Promise.all(availabilityPromises);
       
       // Filter and populate options
-      learnLangEl.innerHTML = '<option value="">Select language to learn</option>';
+      learningSelect.innerHTML = '<option value="">Select language to learn</option>';
       
       const availableLanguages = results
         .filter(result => result && (result.availability === 'available' || result.availability === 'downloadable'))
@@ -165,7 +161,7 @@
         const option = document.createElement('option');
         option.value = lang.code;
         option.textContent = `${lang.flag} ${lang.name}`;
-        learnLangEl.appendChild(option);
+        learningSelect.appendChild(option);
       });
 
       // Add unavailable languages with indication
@@ -173,36 +169,37 @@
         const separator = document.createElement('option');
         separator.disabled = true;
         separator.textContent = '─── Limited support ───';
-        learnLangEl.appendChild(separator);
+        learningSelect.appendChild(separator);
 
         unavailableLanguages.forEach(lang => {
           const option = document.createElement('option');
           option.value = lang.code;
           option.textContent = `${lang.flag} ${lang.name} (limited)`;
           option.style.color = '#9ca3af';
-          learnLangEl.appendChild(option);
+          learningSelect.appendChild(option);
         });
       }
 
       // Restore previous selection if still available
-      if (currentLearningLang && learnLangEl.querySelector(`option[value="${currentLearningLang}"]`)) {
-        learnLangEl.value = currentLearningLang;
+      if (currentLearningLang && learningSelect.querySelector(`option[value="${currentLearningLang}"]`)) {
+        learningSelect.value = currentLearningLang;
       }
 
     } catch (error) {
       console.error('Failed to check language availability:', error);
       // Fallback to showing all languages
-      learnLangEl.innerHTML = '<option value="">Select language to learn</option>';
+      learningSelect.innerHTML = '<option value="">Select language to learn</option>';
       languages.forEach(lang => {
         if (lang.code !== selectedNativeLang) {
           const option = document.createElement('option');
           option.value = lang.code;
           option.textContent = `${lang.flag} ${lang.name}`;
-          learnLangEl.appendChild(option);
+          learningSelect.appendChild(option);
         }
       });
     } finally {
-      learnLangEl.disabled = false;
+      learningSelect.disabled = false;
+      availabilityStatus.style.display = 'none';
     }
   }
 
@@ -223,61 +220,119 @@
     });
   }
 
-  function load() {
-    try {
-      if (!chrome.storage || !chrome.storage.local) return;
-      chrome.storage.local.get(['weblangUserLang', 'weblangLearnLang'], (res) => {
-        userLangEl.value = (res && res.weblangUserLang) || '';
-        learnLangEl.value = (res && res.weblangLearnLang) || '';
-      });
-    } catch {}
+  // Auto-detect user's language preference
+  function detectUserLanguage() {
+    const browserLang = navigator.language.split('-')[0];
+    const detectedLang = languages.find(lang => lang.code === browserLang);
+    
+    if (detectedLang) {
+      nativeSelect.value = detectedLang.code;
+    }
   }
 
-  function save() {
-    const userLang = userLangEl.value || '';
-    const learnLang = learnLangEl.value || '';
-    try {
-      if (!chrome.storage || !chrome.storage.local) return;
-      chrome.storage.local.set({ 
-        weblangUserLang: userLang, 
-        weblangLearnLang: learnLang,
+  // Save settings to storage
+  function saveSettings() {
+    const nativeLang = nativeSelect.value;
+    const learningLang = learningSelect.value;
+
+    if (!nativeLang && !learningLang) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      chrome.storage.local.set({
+        weblangUserLang: nativeLang,
+        weblangLearnLang: learningLang,
         weblangSetupCompleted: true,
         weblangSetupDate: Date.now()
       }, () => {
-        showStatus('Saved');
+        resolve();
       });
-    } catch {}
+    });
   }
 
-  function reset() {
-    userLangEl.value = '';
-    learnLangEl.value = '';
-    try {
-      if (!chrome.storage || !chrome.storage.local) return;
-      chrome.storage.local.remove(['weblangUserLang', 'weblangLearnLang', 'weblangSetupCompleted', 'weblangSetupDate'], () => {
-        showStatus('Reset');
-      });
-    } catch {}
-  }
-
-  // Initialize the options page
-  function init() {
-    // Populate language dropdowns
-    populateLanguageSelect(userLangEl, 'Select your native language');
-    populateLanguageSelect(learnLangEl, 'Select language to learn');
+  // Handle form submission
+  async function handleSubmit(e) {
+    e.preventDefault();
     
-    // Add event listener for native language changes
-    userLangEl.addEventListener('change', async () => {
+    saveBtn.textContent = 'Saving...';
+    saveBtn.disabled = true;
+
+    try {
+      await saveSettings();
+      
+      // Close the setup window
+      if (chrome.tabs) {
+        // If opened as a tab, close it
+        const currentTab = await chrome.tabs.getCurrent();
+        if (currentTab) {
+          chrome.tabs.remove(currentTab.id);
+        }
+      } else {
+        // If opened as a popup, close it
+        window.close();
+      }
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      saveBtn.textContent = 'Get Started';
+      saveBtn.disabled = false;
+    }
+  }
+
+  // Handle skip button
+  async function handleSkip() {
+    skipBtn.textContent = 'Skipping...';
+    skipBtn.disabled = true;
+
+    try {
+      await saveSettings();
+      
+      // Close the setup window
+      if (chrome.tabs) {
+        const currentTab = await chrome.tabs.getCurrent();
+        if (currentTab) {
+          chrome.tabs.remove(currentTab.id);
+        }
+      } else {
+        window.close();
+      }
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      skipBtn.textContent = 'Skip for now';
+      skipBtn.disabled = false;
+    }
+  }
+
+  // Initialize the setup page
+  function init() {
+    populateLanguageSelect(nativeSelect, 'Select your native language');
+    populateLanguageSelect(learningSelect, 'Select language to learn');
+    
+    // Auto-detect user's language
+    detectUserLanguage();
+    
+    // Add event listeners
+    setupForm.addEventListener('submit', handleSubmit);
+    skipBtn.addEventListener('click', handleSkip);
+    
+    // Enable/disable save button based on form validity
+    function updateSaveButton() {
+      const isValid = nativeSelect.value && learningSelect.value;
+      saveBtn.disabled = !isValid;
+    }
+    
+    // Update learning language options when native language changes
+    nativeSelect.addEventListener('change', async () => {
+      updateSaveButton();
       await updateLearningLanguageOptions();
     });
     
-    // Load existing settings
-    load();
+    learningSelect.addEventListener('change', updateSaveButton);
+    
+    // Initial button state
+    updateSaveButton();
   }
 
-  saveBtn.addEventListener('click', save);
-  resetBtn.addEventListener('click', reset);
+  // Start the setup process
   init();
 })();
-
-

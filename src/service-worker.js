@@ -1,6 +1,24 @@
 // Open side panel and relay preferences
 
-chrome.runtime.onInstalled.addListener(() => {});
+chrome.runtime.onInstalled.addListener(async (details) => {
+  // Check if this is a first install or update
+  if (details.reason === 'install') {
+    // Check if setup has already been completed
+    const result = await chrome.storage.local.get(['weblangSetupCompleted']);
+    
+    if (!result.weblangSetupCompleted) {
+      // Open setup page in a new tab
+      try {
+        await chrome.tabs.create({
+          url: chrome.runtime.getURL('setup.html'),
+          active: true
+        });
+      } catch (error) {
+        console.error('Failed to open setup page:', error);
+      }
+    }
+  }
+});
 
 // Handle extension icon click to open sidebar
 chrome.action.onClicked.addListener(async (tab) => {

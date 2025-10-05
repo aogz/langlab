@@ -25,6 +25,7 @@
     }
     
     await loadSavedWords();
+    await loadSetupStatus();
     setupEventListeners();
     updateDisplay();
   }
@@ -65,6 +66,66 @@
     } catch (error) {
       console.error('Error loading saved words:', error);
       savedWords = [];
+    }
+  }
+
+  // Load setup status and display language preferences
+  async function loadSetupStatus() {
+    try {
+      const result = await chrome.storage.local.get(['weblangUserLang', 'weblangLearnLang', 'weblangSetupCompleted']);
+      const setupStatus = document.getElementById('setupStatus');
+      const setupNativeLang = document.getElementById('setupNativeLang');
+      const setupLearningLang = document.getElementById('setupLearningLang');
+      
+      if (result.weblangSetupCompleted && result.weblangUserLang && result.weblangLearnLang) {
+        // Show setup status
+        setupStatus.style.display = 'block';
+        
+        // Get language names from codes
+        const nativeLangName = getLanguageName(result.weblangUserLang);
+        const learningLangName = getLanguageName(result.weblangLearnLang);
+        
+        setupNativeLang.textContent = nativeLangName;
+        setupLearningLang.textContent = learningLangName;
+      } else {
+        // Hide setup status if not completed
+        setupStatus.style.display = 'none';
+      }
+    } catch (error) {
+      console.error('Error loading setup status:', error);
+    }
+  }
+
+  // Get language name from code
+  function getLanguageName(code) {
+    const languageMap = {
+      'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian',
+      'pt': 'Portuguese', 'ru': 'Russian', 'ja': 'Japanese', 'ko': 'Korean', 'zh': 'Chinese',
+      'ar': 'Arabic', 'hi': 'Hindi', 'nl': 'Dutch', 'sv': 'Swedish', 'no': 'Norwegian',
+      'da': 'Danish', 'fi': 'Finnish', 'pl': 'Polish', 'cs': 'Czech', 'hu': 'Hungarian',
+      'ro': 'Romanian', 'bg': 'Bulgarian', 'hr': 'Croatian', 'sk': 'Slovak', 'sl': 'Slovenian',
+      'et': 'Estonian', 'lv': 'Latvian', 'lt': 'Lithuanian', 'el': 'Greek', 'tr': 'Turkish',
+      'he': 'Hebrew', 'th': 'Thai', 'vi': 'Vietnamese', 'id': 'Indonesian', 'ms': 'Malay',
+      'tl': 'Filipino', 'uk': 'Ukrainian', 'be': 'Belarusian', 'ka': 'Georgian', 'hy': 'Armenian',
+      'az': 'Azerbaijani', 'kk': 'Kazakh', 'ky': 'Kyrgyz', 'uz': 'Uzbek', 'mn': 'Mongolian',
+      'ne': 'Nepali', 'si': 'Sinhala', 'ta': 'Tamil', 'te': 'Telugu', 'ml': 'Malayalam',
+      'kn': 'Kannada', 'gu': 'Gujarati', 'pa': 'Punjabi', 'bn': 'Bengali', 'ur': 'Urdu',
+      'fa': 'Persian', 'ps': 'Pashto', 'sw': 'Swahili', 'am': 'Amharic', 'yo': 'Yoruba',
+      'ig': 'Igbo', 'ha': 'Hausa', 'zu': 'Zulu', 'af': 'Afrikaans', 'is': 'Icelandic',
+      'ga': 'Irish', 'cy': 'Welsh', 'mt': 'Maltese', 'eu': 'Basque', 'ca': 'Catalan', 'gl': 'Galician'
+    };
+    return languageMap[code] || code.toUpperCase();
+  }
+
+  // Open setup page for language configuration
+  async function openSetup() {
+    try {
+      await chrome.tabs.create({
+        url: chrome.runtime.getURL('setup.html'),
+        active: true
+      });
+    } catch (error) {
+      console.error('Failed to open setup page:', error);
     }
   }
 
@@ -175,6 +236,12 @@
     // Practice button
     const practiceBtn = document.getElementById('practiceBtn');
     practiceBtn.addEventListener('click', startPractice);
+
+    // Setup change button
+    const setupChangeBtn = document.getElementById('setupChangeBtn');
+    if (setupChangeBtn) {
+      setupChangeBtn.addEventListener('click', openSetup);
+    }
 
     // Practice modal event listeners
     const practiceModal = document.getElementById('practiceModal');
