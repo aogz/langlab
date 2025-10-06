@@ -1,6 +1,6 @@
-(() => {
-  const { languages, populateLanguageSelect, checkLanguagePairAvailability } = window.langlab;
+import { languages, populateLanguageSelect, checkLanguagePairAvailability } from './utils.js';
 
+(() => {
   const nativeSelect = document.getElementById('nativeLanguage');
   const learningSelect = document.getElementById('learningLanguage');
   const setupForm = document.getElementById('setupForm');
@@ -215,14 +215,14 @@
     populateLanguageSelect(learningSelect, 'Select language to learn');
     
     // Load existing settings first
-    await loadExistingSettings();
+    const existingSettings = await loadExistingSettings();
     
     // Auto-detect user's language only if no existing settings
     detectUserLanguage();
 
     // If a native language is already selected, update the learning language options
     if (nativeSelect.value) {
-      await updateLearningLanguageOptions();
+      await updateLearningLanguageOptions(existingSettings.weblangLearnLang);
     }
     
     // Enable/disable save button based on form validity

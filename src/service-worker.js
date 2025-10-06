@@ -40,6 +40,9 @@ chrome.action.onClicked.addListener(async (tab) => {
 
 import { saveWordsToSidebar } from './utils.js';
 
+const translatorCache = new Map(); // key: `${source}-${target}` -> Promise<Translator>
+let languageDetectorPromise = null;
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || !sender) return;
   
@@ -294,6 +297,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true; // Indicates that the response is sent asynchronously
   }
+
+  if (message.type === 'DETECT_LANGUAGE') {
+    detectLanguageCode(message.text, sender.tab.id, message.requestId)
+      .then(result => sendResponse({ success: true, result }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  if (message.type === 'TRANSLATE_TEXT') {
+    const { text, targetLang, sourceLang } = message;
+    translate(text, targetLang, sourceLang, sender.tab.id, message.requestId)
+      .then(result => sendResponse({ success: true, result }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
 });
 
 function getDomainFromUrl(url) {
@@ -302,6 +320,121 @@ function getDomainFromUrl(url) {
     return urlObj.hostname;
   } catch {
     return url;
+  }
+}
+
+async function getTranslator(sourceLanguage, targetLanguage, tabId, requestId) {
+  if (!('Translator' in self)) return null;
+  const key = `${sourceLanguage}-${targetLanguage}`;
+  if (translatorCache.has(key)) return translatorCache.get(key);
+
+  const promise = (async () => {
+    try {
+      if (typeof self.Translator.availability === 'function') {
+        try {
+          await self.Translator.availability({ sourceLanguage, targetLanguage });
+        } catch (e) {
+          // proceed; create() will handle download and readiness
+        }
+      }
+
+      const translator = await self.Translator.create({
+        sourceLanguage,
+        targetLanguage,
+        monitor(monitor) {
+          if (!tabId || !requestId || !monitor || typeof monitor.addEventListener !== 'function') return;
+          monitor.addEventListener('downloadprogress', (e) => {
+            try {
+              const pct = Math.round((e.loaded || 0) * 100);
+              chrome.tabs.sendMessage(tabId, {
+                type: 'TRANSLATION_PROGRESS',
+                requestId,
+                message: `Downloading translation model… ${pct}%`
+              });
+            } catch {}
+          });
+        }
+      });
+      return translator;
+    } catch (err) {
+      return null;
+    }
+  })();
+
+  translatorCache.set(key, promise);
+  return promise;
+}
+
+async function getLanguageDetector(tabId, requestId) {
+  if (!('LanguageDetector' in self)) return null;
+  if (languageDetectorPromise) return languageDetectorPromise;
+  languageDetectorPromise = (async () => {
+    try {
+      if (typeof self.LanguageDetector.availability === 'function') {
+        try { await self.LanguageDetector.availability(); } catch {}
+      }
+      const det = await self.LanguageDetector.create({
+        monitor(m) {
+          if (!tabId || !requestId || !m || typeof m.addEventListener !== 'function') return;
+          m.addEventListener('downloadprogress', (e) => {
+            try {
+              chrome.tabs.sendMessage(tabId, {
+                type: 'TRANSLATION_PROGRESS',
+                requestId,
+                message: `Preparing language model… ${Math.round((e.loaded||0)*100)}%`
+              });
+            } catch {}
+          });
+        }
+      });
+      return det;
+    } catch {
+      return null;
+    }
+  })();
+  return languageDetectorPromise;
+}
+
+async function detectLanguageCode(text, tabId, requestId) {
+  try {
+    const det = await getLanguageDetector(tabId, requestId);
+    if (!det) return 'unknown';
+    const results = await det.detect(String(text||''));
+    if (Array.isArray(results) && results.length > 0) {
+      const top = results[0];
+      if (top && top.detectedLanguage) return top.detectedLanguage;
+    }
+    return 'unknown';
+  } catch { return 'unknown'; }
+}
+
+async function translate(text, targetLang = 'en', sourceLang, tabId, requestId) {
+  try {
+    if (!('Translator' in self)) return null;
+
+    let finalSourceLang = sourceLang;
+    let finalTargetLang = targetLang;
+
+    // Get user's saved language preferences
+    try {
+      if (chrome.storage && chrome.storage.local) {
+        const conf = await new Promise((resolve) => chrome.storage.local.get(['weblangUserLang', 'weblangLearnLang'], (r) => resolve(r || {})));
+        // Only fall back to preferences if caller did not supply values
+        if (!finalSourceLang && conf && conf.weblangLearnLang) finalSourceLang = conf.weblangLearnLang;
+        if (!finalTargetLang && conf && conf.weblangUserLang) finalTargetLang = conf.weblangUserLang;
+      }
+    } catch {}
+
+    if (!finalSourceLang) {
+      finalSourceLang = await detectLanguageCode(text, tabId, `source-detect-${requestId}`);
+    }
+    
+    const translator = await getTranslator(finalSourceLang, finalTargetLang, tabId, requestId);
+    if (!translator) return null;
+    const result = await translator.translate(text);
+    return typeof result === 'string' ? result : (result && (result.translation || result.translatedText || ''));
+  } catch (e) {
+    return null;
   }
 }
 

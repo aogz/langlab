@@ -86,8 +86,8 @@
         const nativeLangName = getLanguageName(result.weblangUserLang);
         const learningLangName = getLanguageName(result.weblangLearnLang);
         
-        setupNativeLang.textContent = nativeLangName;
-        setupLearningLang.textContent = learningLangName;
+        setupNativeLang.textContent = learningLangName;
+        setupLearningLang.textContent = nativeLangName;
       } else {
         // Hide setup status if not completed
         setupStatus.style.display = 'none';

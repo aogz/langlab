@@ -13,7 +13,7 @@
   let textContainer = null;
   let translationBodyEl = null;
   const clickableNodes = new WeakSet();
-  const translatorCache = new Map(); // key: `${source}-${target}` -> Promise<Translator>
+  // translation is handled in the service worker; no local translator cache
   let activeParagraphEl = null;
   let hoverOverlayEl = null;
   let backdropEl = null;
@@ -29,6 +29,14 @@
   let isPopupCollapsed = false;
   let dragListenersAttached = false;
   let currentDetectedLanguage = 'unknown';
+
+  const progressCallbacks = new Map();
+
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === 'TRANSLATION_PROGRESS' && progressCallbacks.has(message.requestId)) {
+      progressCallbacks.get(message.requestId)(message.message);
+    }
+  });
 
   function attachDragListeners() {
     if (dragListenersAttached) return;
@@ -95,44 +103,7 @@
     }
   }
 
-  async function getTranslator(sourceLanguage, targetLanguage, onProgress) {
-    if (!('Translator' in self)) return null;
-    const key = `${sourceLanguage}-${targetLanguage}`;
-    if (translatorCache.has(key)) return translatorCache.get(key);
-
-    const promise = (async () => {
-      try {
-        // Optional: check availability (may return 'available' or 'downloadable')
-        if (typeof self.Translator.availability === 'function') {
-          try {
-            await self.Translator.availability({ sourceLanguage, targetLanguage });
-          } catch (e) {
-            // proceed; create() will handle download and readiness
-          }
-        }
-
-        const translator = await self.Translator.create({
-          sourceLanguage,
-          targetLanguage,
-          monitor(monitor) {
-            if (!onProgress || !monitor || typeof monitor.addEventListener !== 'function') return;
-            monitor.addEventListener('downloadprogress', (e) => {
-              try {
-                const pct = Math.round((e.loaded || 0) * 100);
-                onProgress(`Downloading translation model… ${pct}%`);
-              } catch {}
-            });
-          }
-        });
-        return translator;
-      } catch (err) {
-        return null;
-      }
-    })();
-
-    translatorCache.set(key, promise);
-    return promise;
-  }
+  // removed local getTranslator; translation runs in service worker
 
   function ensureContainer() {
     if (textContainer && document.body.contains(textContainer)) return textContainer;
@@ -332,155 +303,6 @@
     wrapper.appendChild(dot);
     wrapper.appendChild(text);
     translationBodyEl.appendChild(wrapper);
-  }
-
-  function setOverlayTranslationResult(resultText) {
-    if (!translationBodyEl) return;
-    translationBodyEl.innerHTML = '';
-    const card = document.createElement('div');
-    card.style.border = '1px solid rgba(75,85,99,0.9)';
-    card.style.background = 'rgba(17,24,39,0.9)';
-    card.style.borderRadius = '12px';
-    card.style.padding = '12px 14px';
-    card.style.boxShadow = '0 8px 22px rgba(0,0,0,0.30)';
-
-    const titleRow = document.createElement('div');
-    titleRow.style.display = 'flex';
-    titleRow.style.alignItems = 'center';
-    titleRow.style.justifyContent = 'space-between';
-    titleRow.style.marginBottom = '8px';
-
-    const title = document.createElement('span');
-    title.textContent = 'Translation';
-    title.style.fontSize = '13px';
-    title.style.letterSpacing = '0.3px';
-    title.style.color = 'rgba(209,213,219,0.9)';
-
-    const copyBtn = document.createElement('button');
-    copyBtn.textContent = 'Copy';
-    copyBtn.style.padding = '6px 10px';
-    copyBtn.style.background = '#2563eb';
-    copyBtn.style.color = '#fff';
-    copyBtn.style.border = 'none';
-    copyBtn.style.borderRadius = '8px';
-    copyBtn.style.cursor = 'pointer';
-    copyBtn.addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText(resultText || ''); copyBtn.textContent = 'Copied!'; setTimeout(() => copyBtn.textContent = 'Copy', 1200); } catch {}
-    });
-
-    const hr = document.createElement('div');
-    hr.style.height = '1px';
-    hr.style.background = 'rgba(75,85,99,0.6)';
-    hr.style.margin = '4px 0 8px 0';
-
-    const text = document.createElement('div');
-    text.style.fontSize = '18px';
-    text.style.lineHeight = '1.7';
-    text.style.color = '#f3f4f6';
-    text.style.whiteSpace = 'pre-wrap';
-    text.style.wordBreak = 'break-word';
-    text.textContent = resultText || 'Translation not available.';
-
-    titleRow.appendChild(title);
-    titleRow.appendChild(copyBtn);
-    card.appendChild(titleRow);
-    card.appendChild(hr);
-    card.appendChild(text);
-
-    // Add save to vocab button if we have translation text and selected word
-    if (resultText && resultText.trim() && selectedWords.length > 0) {
-      const selectedWord = selectedWords.join(' ');
-      const saveBtn = document.createElement('button');
-      saveBtn.textContent = 'Add to Vocab';
-      saveBtn.style.width = '100%';
-      saveBtn.style.padding = '8px 12px';
-      saveBtn.style.background = '#10b981';
-      saveBtn.style.border = 'none';
-      saveBtn.style.color = '#fff';
-      saveBtn.style.borderRadius = '8px';
-      saveBtn.style.fontSize = '13px';
-      saveBtn.style.cursor = 'pointer';
-      saveBtn.style.marginTop = '12px';
-      saveBtn.style.fontWeight = '500';
-      
-      saveBtn.addEventListener('click', async () => {
-        try {
-          const result = await saveWordToVocab(resultText.trim());
-          if (result.success) {
-            if (result.isNewWord) {
-              saveBtn.textContent = 'Added!';
-              saveBtn.style.background = '#059669';
-            } else {
-              saveBtn.textContent = 'Updated!';
-              saveBtn.style.background = '#f59e0b';
-            }
-            setTimeout(() => {
-              saveBtn.textContent = 'Add to Vocab';
-              saveBtn.style.background = '#10b981';
-            }, 1500);
-          } else {
-            saveBtn.textContent = 'Already exists';
-            saveBtn.style.background = '#6b7280';
-            setTimeout(() => {
-              saveBtn.textContent = 'Add to Vocab';
-              saveBtn.style.background = '#10b981';
-            }, 1500);
-          }
-        } catch (error) {
-          saveBtn.textContent = 'Error';
-          saveBtn.style.background = '#ef4444';
-          setTimeout(() => {
-            saveBtn.textContent = 'Add to Vocab';
-            saveBtn.style.background = '#10b981';
-          }, 1500);
-        }
-      });
-      
-      card.appendChild(saveBtn);
-    }
-
-    translationBodyEl.appendChild(card);
-  }
-
-  function setPopupTitledCard(bodyEl, titleText, bodyText) {
-    if (!bodyEl) return;
-    const card = document.createElement('div');
-    card.style.border = '1px solid rgba(75,85,99,0.9)';
-    card.style.background = 'rgba(17,24,39,0.9)';
-    card.style.borderRadius = '12px';
-    card.style.padding = '12px 14px';
-    card.style.boxShadow = '0 8px 22px rgba(0,0,0,0.30)';
-
-    const titleRow = document.createElement('div');
-    titleRow.style.display = 'flex';
-    titleRow.style.alignItems = 'center';
-    titleRow.style.justifyContent = 'space-between';
-    titleRow.style.marginBottom = '8px';
-
-    const title = document.createElement('span');
-    title.textContent = titleText || '';
-    title.style.fontSize = '13px';
-    title.style.letterSpacing = '0.3px';
-    title.style.color = 'rgba(209,213,219,0.9)';
-
-    const hr = document.createElement('div');
-    hr.style.height = '1px';
-    hr.style.background = 'rgba(75,85,99,0.6)';
-    hr.style.margin = '4px 0 8px 0';
-
-    const text = document.createElement('div');
-    text.style.fontSize = '18px';
-    text.style.lineHeight = '1.7';
-    text.style.color = '#f3f4f6';
-    text.style.whiteSpace = 'pre-wrap';
-    text.style.wordBreak = 'break-word';
-    text.textContent = bodyText || '';
-
-    titleRow.appendChild(title);
-    card.appendChild(titleRow);
-    card.appendChild(hr);
-    card.appendChild(text);
-    bodyEl.appendChild(card);
   }
 
   function renderQuestionClickableBlock(targetEl, text, beforeEl) {
@@ -969,6 +791,14 @@
     });
   }
   
+  async function getLearningLanguage() {
+    try {
+      if (!chrome.storage || !chrome.storage.local) return null;
+      const conf = await new Promise((resolve) => chrome.storage.local.get(['weblangLearnLang'], (r)=> resolve(r||{})));
+      return conf && conf.weblangLearnLang ? conf.weblangLearnLang : null;
+    } catch { return null; }
+  }
+
   async function displayImageQuestion(question, container, img) {
     // Remove the loading wrapper
     const loadingWrapper = container.querySelector('div[style*="border: 1px dashed"]');
@@ -976,8 +806,9 @@
       loadingWrapper.remove();
     }
     
-    // Translate the question to user's language (same as text popups)
-    const targetLang = getDocumentLanguage() || 'en';
+    // Translate the question to the user's learning language
+    const learnLang = await getLearningLanguage();
+    const targetLang = learnLang || getDocumentLanguage() || 'en';
     const translated = await translateTo(question, targetLang, 'en');
     const finalQuestion = translated || question || '';
     
@@ -1445,52 +1276,52 @@
     bodyEl.appendChild(box);
   }
 
-  async function getLanguageDetector(onProgress) {
-    if (!('LanguageDetector' in self)) return null;
-    if (languageDetectorPromise) return languageDetectorPromise;
-    languageDetectorPromise = (async () => {
-      try {
-        if (typeof self.LanguageDetector.availability === 'function') {
-          try { await self.LanguageDetector.availability(); } catch {}
-        }
-        const det = await self.LanguageDetector.create({
-          monitor(m) {
-            if (!m || typeof m.addEventListener !== 'function') return;
-            m.addEventListener('downloadprogress', (e) => {
-              try { onProgress && onProgress(`Preparing language model… ${Math.round((e.loaded||0)*100)}%`); } catch {}
-            });
-          }
-        });
-        return det;
-      } catch {
-        return null;
-      }
-    })();
-    return languageDetectorPromise;
-  }
+  // removed local getLanguageDetector; detection runs in service worker
 
   async function detectLanguageCode(text, onProgress) {
+    const requestId = `detect-${Date.now()}-${Math.random()}`;
+    if (onProgress) {
+      progressCallbacks.set(requestId, onProgress);
+    }
     try {
-      const det = await getLanguageDetector(onProgress);
-      if (!det) return 'unknown';
-      const results = await det.detect(String(text||''));
-      if (Array.isArray(results) && results.length > 0) {
-        const top = results[0];
-        if (top && top.detectedLanguage) return top.detectedLanguage;
+      const response = await chrome.runtime.sendMessage({
+        type: 'DETECT_LANGUAGE',
+        text,
+        requestId
+      });
+      if (response.success) {
+        return response.result;
       }
-      return 'unknown';
-    } catch { return 'unknown'; }
+      throw new Error(response.error || 'Language detection failed');
+    } finally {
+      progressCallbacks.delete(requestId);
+    }
   }
 
-  async function translateTo(text, targetLang, sourceLangOpt) {
+  async function translateTo(text, targetLang, sourceLangOpt, onProgress) {
+    const requestId = `translate-to-${Date.now()}-${Math.random()}`;
     try {
-      if (!('Translator' in self)) return null;
-      const src = sourceLangOpt || getDocumentLanguage();
-      const translator = await getTranslator(src, targetLang, () => {});
-      if (!translator) return null;
-      const result = await translator.translate(text);
-      return typeof result === 'string' ? result : (result && (result.translation || result.translatedText || ''));
-    } catch { return null; }
+      if (onProgress) {
+        progressCallbacks.set(requestId, onProgress);
+      }
+      const response = await chrome.runtime.sendMessage({
+        type: 'TRANSLATE_TEXT',
+        text,
+        targetLang,
+        sourceLang: sourceLangOpt || getDocumentLanguage(),
+        requestId
+      });
+      if (response && response.success) {
+        return response.result;
+      }
+      return null;
+    } catch {
+      return null;
+    } finally {
+      if (onProgress) {
+        progressCallbacks.delete(requestId);
+      }
+    }
   }
 
   // Prompt API (Gemini Nano) helper executed in the PAGE context (not content script)
@@ -1653,8 +1484,8 @@
             
             const q = await askQuestionWithPromptAPI(selectedText, existingQuestions);
             if (popupBodyRef) {
-              const srcLang = await detectLanguageCode(selectedText);
-              const target = (srcLang && srcLang !== 'unknown') ? srcLang : getDocumentLanguage();
+              const learnLang = await getLearningLanguage();
+              const target = learnLang || getDocumentLanguage();
               const translated = await translateTo(q, target, 'en');
               const finalQ = translated || q || '';
               // Insert question before the input container if it exists
@@ -1663,7 +1494,7 @@
               popupWordsContainerEl = wordsEl;
               // Only attach response controls if this is the first question
               if (!hasExistingContent) {
-                attachResponseControls(popupBodyRef, srcLang);
+                attachResponseControls(popupBodyRef, target);
               }
               // Update input visibility after adding question
               updateInputVisibility(popupBodyRef);
@@ -1687,8 +1518,8 @@
           });
           
           const q = await askQuestionWithPromptAPI(selectedText, existingQuestions);
-          const srcLang = await detectLanguageCode(selectedText);
-          const target = (srcLang && srcLang !== 'unknown') ? srcLang : getDocumentLanguage();
+          const learnLang = await getLearningLanguage();
+          const target = learnLang || getDocumentLanguage();
           const translated = await translateTo(q, target, 'en');
           const finalQ = translated || q || '';
           // Append new question instead of replacing
@@ -1699,7 +1530,7 @@
           } else {
             translationBodyEl.innerHTML = '';
             renderQuestionClickableBlock(translationBodyEl, finalQ);
-            attachResponseControls(translationBodyEl, srcLang);
+            attachResponseControls(translationBodyEl, target);
           }
           // Update input visibility after adding question
           updateInputVisibility(translationBodyEl);
@@ -1708,8 +1539,8 @@
         const msg = (e && e.message) ? e.message : 'Unable to generate a question.';
         if (context === 'popup') {
           if (popupBodyRef) setPopupTranslationResult(popupBodyRef, msg);
-        } else {
-          setOverlayTranslationResult(msg);
+        } else if (context === 'image-popup') {
+          if (popupBodyRef) setPopupTranslationResult(popupBodyRef, msg);
         }
       } finally {
         setActionButtonsDisabled(false); btnAsk.textContent = 'Ask me a question';
@@ -1809,62 +1640,6 @@
     btn.style.fontSize = '13px';
     btn.style.borderRadius = '8px';
     btn.style.cursor = 'pointer';
-  }
-
-  function iconBtnStyles(btn){
-    btn.style.padding = '8px 12px';
-    btn.style.background = 'rgba(31,41,55,0.7)';
-    btn.style.border = '1px solid rgba(75,85,99,0.8)';
-    btn.style.color = '#e5e7eb';
-    btn.style.fontSize = '13px';
-    btn.style.borderRadius = '8px';
-    btn.style.cursor = 'pointer';
-  }
-
-  // Sidebar functionality removed
-
-  function createPopup(position, text, translation, isTranslating) {
-    clearPopup();
-    const container = ensureContainer();
-    ensureBackdrop();
-    popupEl = document.createElement('div');
-    popupEl.className = `${EXT_CLS_PREFIX}-popup`;
-    popupEl.style.position = 'fixed';
-    popupEl.style.left = `${position.x}px`;
-    popupEl.style.top = `${position.y}px`;
-    popupEl.style.transform = position.transform;
-    popupEl.style.width = '380px';
-    popupEl.style.pointerEvents = 'auto';
-    popupEl.style.background = 'rgba(17,24,39,0.96)';
-    popupEl.style.border = '1px solid rgba(75,85,99,0.9)';
-    popupEl.style.color = '#e5e7eb';
-    popupEl.style.borderRadius = '12px';
-    popupEl.style.boxShadow = '0 16px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.04) inset';
-    popupEl.style.padding = '14px';
-    popupEl.style.fontFamily = 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif';
-    popupEl.style.backdropFilter = 'none';
-    popupEl.style.webkitBackdropFilter = 'none';
-
-    const body = document.createElement('div');
-    body.style.fontSize = '18px';
-    body.style.color = '#e5e7eb';
-    body.style.marginBottom = '8px';
-    body.style.wordBreak = 'break-word';
-    if (isTranslating) {
-      setPopupTranslationLoading(body, 'Translating…');
-    } else {
-      setPopupTranslationResult(body, translation || text || '');
-    }
-    popupBodyRef = body;
-
-    const controls = buildControlsBar('popup', text);
-
-    popupEl.appendChild(body);
-    popupEl.appendChild(controls);
-
-    container.appendChild(popupEl);
-
-    return { bodyEl: body };
   }
 
   function createImagePopup(position) {
@@ -2228,27 +2003,7 @@
     });
   }
 
-  async function translate(text, targetLang = 'en', onProgressCb) {
-    try {
-      if (!('Translator' in self)) return null;
-      let sourceLang = getDocumentLanguage();
-      try {
-        if (chrome.storage && chrome.storage.local) {
-          const conf = await new Promise((resolve)=> chrome.storage.local.get(['weblangUserLang','weblangLearnLang'], (r)=> resolve(r||{})));
-          if (conf && conf.weblangUserLang) sourceLang = conf.weblangUserLang;
-          if (conf && conf.weblangLearnLang) targetLang = conf.weblangLearnLang;
-        }
-      } catch {}
-      const translator = await getTranslator(sourceLang, targetLang, (msg) => {
-        try { if (typeof onProgressCb === 'function') onProgressCb(msg); } catch {}
-      });
-      if (!translator) return null;
-      const result = await translator.translate(text);
-      return typeof result === 'string' ? result : (result && (result.translation || result.translatedText || ''));
-    } catch (e) {
-      return null;
-    }
-  }
+  // removed local translate; translation runs in service worker via translateTo
 
   function handleGlobalMouseUp() {
     if (isDragging) {
@@ -2280,7 +2035,7 @@
             return;
           }
           const { bodyEl } = createTipPopover(pos, selectedText, true);
-          translate(selectedText, 'en', (msg)=>{ try { bodyEl.textContent = msg; } catch {} }).then((t) => {
+          translateTo(selectedText, 'en', undefined, (msg)=>{ try { bodyEl.textContent = msg; } catch {} }).then((t) => {
             if (!tipEl) return;
             setPopupTranslationResult(bodyEl, t || 'Translation not available.');
           });
