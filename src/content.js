@@ -52,12 +52,15 @@
 
   function getDocumentLanguage() {
     const htmlLang = (document.documentElement && document.documentElement.lang || '').trim();
-    if (htmlLang) return htmlLang.toLowerCase();
+    if (htmlLang && htmlLang !== 'und' && htmlLang !== 'unknown') return htmlLang.toLowerCase();
     // Try common meta
     const metaLang = document.querySelector('meta[http-equiv="content-language" i]');
-    if (metaLang && metaLang.content) return metaLang.content.split(',')[0].trim().toLowerCase();
+    if (metaLang && metaLang.content) {
+      const lang = metaLang.content.split(',')[0].trim().toLowerCase();
+      if (lang && lang !== 'und' && lang !== 'unknown') return lang;
+    }
     const navLang = (navigator.language || '').trim();
-    if (navLang) return navLang.toLowerCase();
+    if (navLang && navLang !== 'und' && navLang !== 'unknown') return navLang.toLowerCase();
     return 'en';
   }
 
@@ -824,6 +827,386 @@
     }
   }
 
+  function attachImageClickHandlers() {
+    // Add floating buttons to all images
+    const images = document.querySelectorAll('img');
+    console.log(`Found ${images.length} images to process`);
+    images.forEach((img, index) => {
+      if (img.dataset.weblangImageHandler) return; // Already has handler
+      
+      console.log(`Processing image ${index + 1}:`, img.src, img.alt);
+      img.dataset.weblangImageHandler = 'true';
+      addFloatingButtonToImage(img);
+    });
+  }
+  
+  function addFloatingButtonToImage(img) {
+    // Create floating button container
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = `${EXT_CLS_PREFIX}-image-button-container`;
+    buttonContainer.style.position = 'absolute';
+    buttonContainer.style.top = '8px';
+    buttonContainer.style.right = '8px';
+    buttonContainer.style.zIndex = '1000';
+    buttonContainer.style.opacity = '1';
+    buttonContainer.style.transition = 'opacity 0.3s ease';
+    buttonContainer.style.pointerEvents = 'auto';
+    buttonContainer.style.maxWidth = '200px';
+    buttonContainer.style.maxHeight = '40px';
+    
+    // Create the floating button
+    const button = document.createElement('button');
+    button.className = `${EXT_CLS_PREFIX}-image-button`;
+    button.textContent = '🤖 Discuss in LangLab';
+    button.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+    button.style.backgroundSize = '200% 200%';
+    button.style.color = '#ffffff';
+    button.style.border = 'none';
+    button.style.borderRadius = '25px';
+    button.style.padding = '8px 16px';
+    button.style.fontSize = '12px';
+    button.style.fontWeight = '600';
+    button.style.cursor = 'pointer';
+    button.style.boxShadow = '0 4px 15px rgba(102, 126, 234, 0.4), 0 2px 8px rgba(0,0,0,0.2)';
+    button.style.transition = 'all 0.3s ease';
+    button.style.backdropFilter = 'blur(8px)';
+    button.style.border = '1px solid rgba(255,255,255,0.2)';
+    button.style.textShadow = '0 1px 2px rgba(0,0,0,0.3)';
+    button.style.animation = 'weblang-gradient-pulse 3s ease-in-out infinite';
+    
+    // Add hover effects
+    button.addEventListener('mouseenter', () => {
+      button.style.background = 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)';
+      button.style.transform = 'scale(1.08) translateY(-2px)';
+      button.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.6), 0 4px 12px rgba(0,0,0,0.3)';
+    });
+    
+    button.addEventListener('mouseleave', () => {
+      button.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+      button.style.transform = 'scale(1) translateY(0)';
+      button.style.boxShadow = '0 4px 15px rgba(102, 126, 234, 0.4), 0 2px 8px rgba(0,0,0,0.2)';
+    });
+    
+    button.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      askQuestionAboutImage(img);
+    });
+    
+    buttonContainer.appendChild(button);
+    
+    // Make image container relative positioned if not already
+    const imgParent = img.parentElement;
+    const computedStyle = window.getComputedStyle(imgParent);
+    if (computedStyle.position === 'static') {
+      imgParent.style.position = 'relative';
+    }
+    
+    // Ensure the image is still visible and not affected by our changes
+    if (!img.style.display || img.style.display === 'none') {
+      img.style.display = 'block';
+    }
+    if (!img.style.maxWidth) {
+      img.style.maxWidth = '100%';
+    }
+    if (!img.style.height) {
+      img.style.height = 'auto';
+    }
+    
+    // Make sure the image is not hidden by our button
+    img.style.zIndex = '1';
+    img.style.position = 'relative';
+    
+    // Insert button into the image's parent container
+    imgParent.appendChild(buttonContainer);
+  }
+  
+  
+  function askQuestionAboutImage(img) {
+    // Use the same popup system as text questions
+    openOverlayForImage(img);
+  }
+  
+  async function openOverlayForImage(img) {
+    if (!img) {
+      console.error('Image is undefined in openOverlayForImage');
+      return;
+    }
+    
+    // Get image position for popup placement
+    const rect = img.getBoundingClientRect();
+    if (!rect) {
+      console.error('Failed to get bounding rect for image');
+      return;
+    }
+    
+    const position = calculatePosition(rect);
+    if (!position) {
+      console.error('Failed to calculate position for image');
+      return;
+    }
+    
+    // Create dedicated image popup (no translation UI)
+    const popup = createImagePopup(position);
+    const body = popup.bodyEl;
+    
+    // Add drag functionality to the popup
+    attachDragListeners();
+    popupEl.addEventListener('mousedown', (e) => {
+      if (isInteractiveTarget(e.target)) return;
+      try {
+        isDraggingPopup = true;
+        const r = popupEl.getBoundingClientRect();
+        popupEl.style.transform = 'none';
+        dragOffsetX = e.clientX - r.left;
+        dragOffsetY = e.clientY - r.top;
+        e.preventDefault();
+        e.stopPropagation();
+      } catch {}
+    });
+    
+    // Add image preview to popup
+    const imgPreview = document.createElement('div');
+    imgPreview.style.marginBottom = '12px';
+    imgPreview.style.textAlign = 'center';
+    imgPreview.style.borderRadius = '8px';
+    imgPreview.style.overflow = 'hidden';
+    
+    const imgClone = img.cloneNode(true);
+    imgClone.style.maxWidth = '100%';
+    imgClone.style.maxHeight = '200px';
+    imgClone.style.borderRadius = '8px';
+    imgClone.style.cursor = 'default';
+    imgClone.style.opacity = '1';
+    imgClone.style.objectFit = 'contain';
+    imgPreview.appendChild(imgClone);
+    
+    body.appendChild(imgPreview);
+    
+    // Add question label
+    const label = document.createElement('div');
+    label.textContent = 'Question about this image:';
+    label.style.color = '#e5e7eb';
+    label.style.fontSize = '14px';
+    label.style.marginBottom = '8px';
+    label.style.fontWeight = '500';
+    body.appendChild(label);
+    
+    // Set popupBodyRef for image popups (needed by buildControlsBar)
+    popupBodyRef = body;
+    
+    // Add the body to the popup first
+    popupEl.appendChild(body);
+    
+    // Create controls bar using the same structure as text popups
+    const controls = buildControlsBar('image-popup', '');
+    
+    // Add the controls to the popup (below the body)
+    popupEl.appendChild(controls);
+  }
+  
+  async function generateImageQuestion(img, container) {
+    try {
+      // Show loading state without clearing the image
+      const loadingDiv = document.createElement('div');
+      loadingDiv.style.color = '#e5e7eb';
+      loadingDiv.style.fontSize = '16px';
+      loadingDiv.style.fontStyle = 'italic';
+      loadingDiv.style.textAlign = 'center';
+      loadingDiv.style.padding = '10px';
+      loadingDiv.textContent = 'Generating question…';
+      container.appendChild(loadingDiv);
+      
+      // Get image data via service worker to bypass CORS
+      let imageData;
+      try {
+        imageData = await getImageDataViaServiceWorker(img);
+      } catch (error) {
+        loadingDiv.textContent = `Error: ${error.message}`;
+        loadingDiv.style.color = '#ef4444';
+        return;
+      }
+      
+      // Convert Blob to base64 before sending to service worker
+      let base64Data = null;
+      let mimeType = 'image/jpeg';
+      
+      try {
+        console.log('Converting blob to base64 in content script, size:', imageData.size, 'type:', imageData.type);
+        const arrayBuffer = await imageData.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        console.log('ArrayBuffer size:', arrayBuffer.byteLength, 'Uint8Array length:', uint8Array.length);
+        
+        // Convert to base64 in chunks to avoid stack overflow
+        let binaryString = '';
+        const chunkSize = 8192; // Process in 8KB chunks
+        for (let i = 0; i < uint8Array.length; i += chunkSize) {
+          const chunk = uint8Array.slice(i, i + chunkSize);
+          binaryString += String.fromCharCode.apply(null, chunk);
+        }
+        base64Data = btoa(binaryString);
+        mimeType = imageData.type || 'image/jpeg';
+        console.log('Base64 conversion complete, length:', base64Data.length, 'mimeType:', mimeType);
+        } catch (error) {
+          console.error('Error converting blob to base64:', error);
+          loadingDiv.textContent = `Error: ${error.message}`;
+          loadingDiv.style.color = '#ef4444';
+          return;
+        }
+      
+      // Send to prompt API
+      const requestId = `weblang_image_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      
+      return new Promise((resolve, reject) => {
+        const onResult = (e) => {
+          try {
+            if (!e || !e.detail || e.detail.id !== requestId) return;
+            window.removeEventListener('weblang-image-result', onResult, true);
+            clearTimeout(timeoutId);
+            if (e.detail.ok) {
+              const question = e.detail.result || '';
+              if (question) {
+                displayImageQuestion(question, container, img);
+              }
+              resolve(question);
+            } else {
+              const errMsg = e.detail.error || 'Failed to generate question';
+              loadingDiv.textContent = `Error: ${errMsg}`;
+              loadingDiv.style.color = '#ef4444';
+              reject(new Error(errMsg));
+            }
+          } catch (err) {
+            window.removeEventListener('weblang-image-result', onResult, true);
+            clearTimeout(timeoutId);
+            reject(err);
+          }
+        };
+        
+        // Add timeout to prevent hanging
+        const timeoutId = setTimeout(() => {
+          window.removeEventListener('weblang-image-result', onResult, true);
+          loadingDiv.textContent = 'Timeout: Request took too long';
+          loadingDiv.style.color = '#ef4444';
+          reject(new Error('Image question generation timeout'));
+        }, 30000); // 30 second timeout
+        
+        window.addEventListener('weblang-image-result', onResult, true);
+        
+        try {
+          console.log('Sending image request to service worker:', requestId);
+          chrome.runtime && chrome.runtime.sendMessage({ 
+            type: 'WEBLANG_IMAGE_REQUEST', 
+            id: requestId, 
+            imageData: base64Data,
+            mimeType: mimeType,
+            language: getDocumentLanguage() || 'en'
+          });
+        } catch (err) {
+          console.error('Error sending image request:', err);
+          window.removeEventListener('weblang-image-result', onResult, true);
+          reject(err);
+        }
+      });
+    } catch (error) {
+      console.error('Error generating image question:', error);
+    }
+  }
+  
+  async function getImageDataViaServiceWorker(img) {
+    return new Promise((resolve, reject) => {
+      // For data URLs or blob URLs, we can use them directly
+      if (img.src.startsWith('data:') || img.src.startsWith('blob:')) {
+        fetch(img.src)
+          .then(response => response.blob())
+          .then(blob => {
+            if (blob && blob.size > 0) {
+              resolve(blob);
+            } else {
+              reject(new Error('Invalid blob data'));
+            }
+          })
+          .catch(reject);
+        return;
+      }
+      
+      // Use service worker to fetch image data (bypasses CORS)
+      const requestId = `weblang_image_fetch_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      
+      const onResult = (e) => {
+        try {
+          if (!e || !e.detail || e.detail.id !== requestId) return;
+          window.removeEventListener('weblang-image-fetch-result', onResult, true);
+          if (e.detail.ok) {
+            const base64Data = e.detail.result;
+            const mimeType = e.detail.mimeType || 'image/jpeg';
+            
+            if (base64Data) {
+              try {
+                console.log('Image MIME type:', mimeType);
+                console.log('Base64 data length:', base64Data.length);
+                
+                // Convert base64 back to blob
+                const binaryString = atob(base64Data);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                  bytes[i] = binaryString.charCodeAt(i);
+                }
+                // Ensure we have a valid image MIME type
+                let finalMimeType = mimeType;
+                if (!mimeType.startsWith('image/')) {
+                  finalMimeType = 'image/jpeg'; // Default to JPEG
+                }
+                
+                const blob = new Blob([bytes], { type: finalMimeType });
+                console.log('Created blob:', blob.size, 'bytes, type:', blob.type);
+                resolve(blob);
+              } catch (error) {
+                reject(new Error(`Failed to decode image data: ${error.message}`));
+              }
+            } else {
+              reject(new Error('No data received from service worker'));
+            }
+          } else {
+            const errMsg = e.detail.error || 'Failed to fetch image';
+            reject(new Error(errMsg));
+          }
+        } catch (err) {
+          window.removeEventListener('weblang-image-fetch-result', onResult, true);
+          reject(err);
+        }
+      };
+      
+      window.addEventListener('weblang-image-fetch-result', onResult, true);
+      
+      try {
+        chrome.runtime && chrome.runtime.sendMessage({ 
+          type: 'WEBLANG_IMAGE_FETCH', 
+          id: requestId, 
+          imageUrl: img.src
+        });
+      } catch (err) {
+        window.removeEventListener('weblang-image-fetch-result', onResult, true);
+        reject(err);
+      }
+    });
+  }
+  
+  function displayImageQuestion(question, container, img) {
+    // Remove the loading div
+    const loadingDiv = container.querySelector('div[style*="font-style: italic"]');
+    if (loadingDiv) {
+      loadingDiv.remove();
+    }
+    
+    // Use the same question display as text popups with proper styling
+    const wordsEl = renderQuestionClickableBlock(container, question);
+    
+    // Use the same response controls as text popups
+    attachResponseControls(container, getDocumentLanguage() || 'en');
+  }
+
+
+
   function attachResponseControls(targetEl, detectedLang) {
     const lang = (detectedLang && detectedLang !== 'unknown') ? detectedLang : getDocumentLanguage() || 'en';
     
@@ -859,13 +1242,41 @@
 
     const micBtn = document.createElement('button');
     micBtn.title = 'Speak your answer';
-    micBtn.textContent = '🎤';
-    micBtn.style.padding = '8px 10px';
-    micBtn.style.borderRadius = '8px';
-    micBtn.style.border = '1px solid rgba(75,85,99,0.8)';
-    micBtn.style.background = 'rgba(31,41,55,0.7)';
-    micBtn.style.color = '#e5e7eb';
+    micBtn.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z" fill="currentColor"/>
+        <path d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10H7V12C7 14.76 9.24 17 12 17C14.76 17 17 14.76 17 12V10H19Z" fill="currentColor"/>
+        <path d="M11 22H13V24H11V22Z" fill="currentColor"/>
+        <path d="M7 22H17V24H7V22Z" fill="currentColor"/>
+      </svg>
+    `;
+    micBtn.style.padding = '10px';
+    micBtn.style.borderRadius = '50%';
+    micBtn.style.border = 'none';
+    micBtn.style.background = 'rgba(37,99,235,0.1)';
+    micBtn.style.color = '#2563eb';
     micBtn.style.cursor = 'pointer';
+    micBtn.style.display = 'flex';
+    micBtn.style.alignItems = 'center';
+    micBtn.style.justifyContent = 'center';
+    micBtn.style.transition = 'all 0.2s ease';
+    micBtn.style.minWidth = '40px';
+    micBtn.style.minHeight = '40px';
+    
+    // Add hover effects
+    micBtn.addEventListener('mouseenter', () => {
+      if (!isRecording) {
+        micBtn.style.background = 'rgba(37,99,235,0.2)';
+        micBtn.style.transform = 'scale(1.05)';
+      }
+    });
+    
+    micBtn.addEventListener('mouseleave', () => {
+      if (!isRecording) {
+        micBtn.style.background = 'rgba(37,99,235,0.1)';
+        micBtn.style.transform = 'scale(1)';
+      }
+    });
 
     const sendBtn = document.createElement('button');
     sendBtn.title = 'Send';
@@ -884,39 +1295,218 @@
     inputContainer.appendChild(row);
     targetEl.appendChild(inputContainer);
 
-    let recognition = null;
-    function getRecognition() {
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SR) return null;
-      const r = new SR();
-      try { r.lang = lang || 'en'; } catch {}
-      r.continuous = false;
-      r.interimResults = false;
-      return r;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
+    
+    async function startAudioRecording() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream, {
+          mimeType: 'audio/webm;codecs=opus'
+        });
+        
+        audioChunks = [];
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunks.push(event.data);
+          }
+        };
+        
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          await processAudioInput(audioBlob);
+          stream.getTracks().forEach(track => track.stop());
+        };
+        
+        mediaRecorder.start();
+        isRecording = true;
+        return true;
+      } catch (error) {
+        console.error('Error starting audio recording:', error);
+        return false;
+      }
+    }
+    
+    function stopAudioRecording() {
+      if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+      }
+    }
+    
+    async function processAudioInput(audioBlob) {
+      try {
+        // Display the recorded audio in the chat
+        displayRecordedAudio(audioBlob);
+        
+        // Send audio blob directly to AI teacher for processing
+        await sendAudioToTeacher(audioBlob);
+      } catch (error) {
+        console.error('Error processing audio:', error);
+        // Reset button state on error
+        resetMicButton();
+      }
+    }
+    
+    
+    function resetMicButton() {
+      micBtn.style.background = 'rgba(37,99,235,0.1)';
+      micBtn.style.color = '#2563eb';
+      micBtn.style.transform = 'scale(1)';
+      micBtn.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z" fill="currentColor"/>
+          <path d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10H7V12C7 14.76 9.24 17 12 17C14.76 17 17 14.76 17 12V10H19Z" fill="currentColor"/>
+          <path d="M11 22H13V24H11V22Z" fill="currentColor"/>
+          <path d="M7 22H17V24H7V22Z" fill="currentColor"/>
+        </svg>
+      `;
+      micBtn.title = 'Speak your answer';
+    }
+    
+    function displayRecordedAudio(audioBlob) {
+      // Create audio message container
+      const audioContainer = document.createElement('div');
+      audioContainer.className = `${EXT_CLS_PREFIX}-audio-message`;
+      audioContainer.style.margin = '8px 0';
+      audioContainer.style.padding = '12px';
+      audioContainer.style.background = 'rgba(31,41,55,0.7)';
+      audioContainer.style.borderRadius = '12px';
+      audioContainer.style.border = '1px solid rgba(75,85,99,0.3)';
+      
+      // Create audio element
+      const audio = document.createElement('audio');
+      audio.controls = true;
+      audio.src = URL.createObjectURL(audioBlob);
+      audio.style.width = '100%';
+      audio.style.marginBottom = '8px';
+      
+      // Create processing indicator
+      const processingDiv = document.createElement('div');
+      processingDiv.className = `${EXT_CLS_PREFIX}-processing`;
+      processingDiv.style.color = '#9ca3af';
+      processingDiv.style.fontSize = '14px';
+      processingDiv.style.fontStyle = 'italic';
+      processingDiv.textContent = 'Processing audio...';
+      
+      // Add elements to container
+      audioContainer.appendChild(audio);
+      audioContainer.appendChild(processingDiv);
+      
+      // Insert before the input container
+      targetEl.insertBefore(audioContainer, inputContainer);
+      
+      // Store references for later updates
+      audioContainer._processingDiv = processingDiv;
+      audioContainer._audioBlob = audioBlob;
+      
+      return audioContainer;
+    }
+    
+    async function sendAudioToTeacher(audioBlob) {
+      try {
+        // Update processing display
+        const audioContainers = targetEl.querySelectorAll(`.${EXT_CLS_PREFIX}-audio-message`);
+        const latestContainer = audioContainers[audioContainers.length - 1];
+        if (latestContainer && latestContainer._processingDiv) {
+          latestContainer._processingDiv.textContent = 'Sending to AI teacher...';
+        }
+        
+        // Send to AI teacher for explanation
+        const requestId = `weblang_teacher_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        
+        return new Promise((resolve, reject) => {
+          const onResult = (e) => {
+            try {
+              if (!e || !e.detail || e.detail.id !== requestId) return;
+              window.removeEventListener('weblang-teacher-result', onResult, true);
+              if (e.detail.ok) {
+                const explanation = e.detail.result || '';
+                if (explanation && latestContainer) {
+                  // Update processing indicator
+                  if (latestContainer._processingDiv) {
+                    latestContainer._processingDiv.style.display = 'none';
+                  }
+                  
+                  // Add teacher's explanation
+                  const explanationDiv = document.createElement('div');
+                  explanationDiv.className = `${EXT_CLS_PREFIX}-teacher-explanation`;
+                  explanationDiv.style.marginTop = '8px';
+                  explanationDiv.style.padding = '8px';
+                  explanationDiv.style.background = 'rgba(37,99,235,0.1)';
+                  explanationDiv.style.borderRadius = '6px';
+                  explanationDiv.style.fontSize = '14px';
+                  explanationDiv.style.color = '#e5e7eb';
+                  explanationDiv.innerHTML = `<strong>AI Teacher:</strong> ${explanation}`;
+                  latestContainer.appendChild(explanationDiv);
+                }
+                resolve(explanation);
+              } else {
+                const errMsg = e.detail.error || 'Teacher explanation failed';
+                console.error('Teacher explanation error:', errMsg);
+                if (latestContainer && latestContainer._processingDiv) {
+                  latestContainer._processingDiv.textContent = 'Error processing audio';
+                  latestContainer._processingDiv.style.color = '#ef4444';
+                }
+                reject(new Error(errMsg));
+              }
+            } catch (err) {
+              window.removeEventListener('weblang-teacher-result', onResult, true);
+              reject(err);
+            }
+          };
+          
+          window.addEventListener('weblang-teacher-result', onResult, true);
+          
+          try {
+            chrome.runtime && chrome.runtime.sendMessage({ 
+              type: 'WEBLANG_TEACHER_REQUEST', 
+              id: requestId, 
+              audioBlob: audioBlob,
+              language: lang || 'en'
+            });
+          } catch (err) {
+            window.removeEventListener('weblang-teacher-result', onResult, true);
+            reject(err);
+          }
+        });
+      } catch (error) {
+        console.error('Error sending to teacher:', error);
+      }
     }
 
-    micBtn.addEventListener('click', () => {
-      if (recognition) {
-        try { recognition.stop(); } catch {}
-        recognition = null;
-        micBtn.style.background = 'rgba(31,41,55,0.7)';
+    micBtn.addEventListener('click', async () => {
+      if (isRecording) {
+        // Stop recording
+        stopAudioRecording();
+        resetMicButton();
         return;
       }
-      recognition = getRecognition();
-      if (!recognition) {
-        micBtn.title = 'Speech recognition not supported in this browser';
+      
+      // Check if MediaRecorder is supported
+      if (!navigator.mediaDevices || !window.MediaRecorder) {
+        micBtn.title = 'Audio recording not supported in this browser';
         return;
       }
-      micBtn.style.background = 'rgba(37,99,235,0.25)';
-      recognition.onresult = (e) => {
-        try {
-          const t = e.results && e.results[0] && e.results[0][0] && e.results[0][0].transcript;
-          if (t) input.value = t;
-        } catch {}
-      };
-      recognition.onerror = () => { micBtn.style.background = 'rgba(31,41,55,0.7)'; };
-      recognition.onend = () => { micBtn.style.background = 'rgba(31,41,55,0.7)'; recognition = null; };
-      try { recognition.start(); } catch { micBtn.style.background = 'rgba(31,41,55,0.7)'; recognition = null; }
+      
+      // Set recording state with stop button
+      micBtn.style.background = '#ef4444';
+      micBtn.style.color = '#ffffff';
+      micBtn.style.transform = 'scale(1.1)';
+      micBtn.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>
+        </svg>
+      `;
+      micBtn.title = 'Click to stop recording';
+      
+      // Start recording
+      const success = await startAudioRecording();
+      if (!success) {
+        resetMicButton();
+        micBtn.title = 'Failed to start audio recording. Please check microphone permissions.';
+      }
     });
 
     async function handleSend() {
@@ -935,10 +1525,15 @@
         askBtn.textContent = 'Thinking…';
       }
       
+      // Check if this is an image question
+      const isImageQuestion = targetEl.classList.contains(`${EXT_CLS_PREFIX}-image-question-container`);
+      
       // Evaluate the answer using Prompt API (page-side) when available
       try {
         const requestId = `weblang_eval_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-        const contextText = (overlayWordsContainerEl && overlayWordsContainerEl.textContent) || (popupWordsContainerEl && popupWordsContainerEl.textContent) || '';
+        const contextText = isImageQuestion ? 
+          'Image-based question' : 
+          (overlayWordsContainerEl && overlayWordsContainerEl.textContent) || (popupWordsContainerEl && popupWordsContainerEl.textContent) || '';
         const onEval = (e) => {
           try {
             if (!e || !e.detail || e.detail.id !== requestId) return;
@@ -1206,7 +1801,21 @@
     langBtn.textContent = 'Detecting…';
     
     // Store the promise so we can wait for it later
-    const languageDetectionPromise = detectLanguageCode(selectedText, (msg)=>{ 
+    let languageDetectionPromise;
+    if (context === 'image-popup') {
+      // For image popups, use document language detection
+      languageDetectionPromise = Promise.resolve(getDocumentLanguage() || 'en').then((lang) => {
+        try {
+          langBtn.textContent = lang;
+          currentDetectedLanguage = lang;
+          return lang;
+        } catch (error) {
+          console.error('Error setting language for image popup:', error);
+          return 'en';
+        }
+      });
+    } else {
+      languageDetectionPromise = detectLanguageCode(selectedText, (msg)=>{ 
       try { langBtn.textContent = msg; } catch {} 
     }).then((code)=>{
       try { 
@@ -1220,6 +1829,7 @@
         return 'unknown';
       }
     });
+    }
     
     // Store the promise globally so save functions can wait for it
     window.currentLanguageDetectionPromise = languageDetectionPromise;
@@ -1236,7 +1846,13 @@
     btnAsk.addEventListener('click', async () => {
       try {
         setActionButtonsDisabled(true); btnAsk.textContent = 'Asking…';
-        if (context === 'popup') {
+        if (context === 'image-popup') {
+          // Handle image popup question generation
+          const img = popupEl ? popupEl.querySelector('img') : null;
+          if (img) {
+            await generateImageQuestion(img, popupBodyRef);
+          }
+        } else if (context === 'popup') {
           if (popupBodyRef) {
             // Check if this is the first question or a follow-up
             const hasExistingContent = popupBodyRef.querySelector(`.${EXT_CLS_PREFIX}-question-block`);
@@ -1470,6 +2086,41 @@
     return { bodyEl: body };
   }
 
+  function createImagePopup(position) {
+    clearPopup();
+    const container = ensureContainer();
+    ensureBackdrop();
+    popupEl = document.createElement('div');
+    popupEl.className = `${EXT_CLS_PREFIX}-popup`;
+    popupEl.style.position = 'fixed';
+    popupEl.style.left = `${position.x}px`;
+    popupEl.style.top = `${position.y}px`;
+    popupEl.style.transform = position.transform;
+    popupEl.style.width = '380px';
+    popupEl.style.pointerEvents = 'auto';
+    popupEl.style.background = 'rgba(17,24,39,0.96)';
+    popupEl.style.border = '1px solid rgba(75,85,99,0.9)';
+    popupEl.style.color = '#e5e7eb';
+    popupEl.style.borderRadius = '12px';
+    popupEl.style.boxShadow = '0 16px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.04) inset';
+    popupEl.style.padding = '14px';
+    popupEl.style.fontFamily = 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif';
+    popupEl.style.backdropFilter = 'none';
+    popupEl.style.webkitBackdropFilter = 'none';
+
+    const body = document.createElement('div');
+    body.style.fontSize = '18px';
+    body.style.color = '#e5e7eb';
+    body.style.marginBottom = '8px';
+    body.style.wordBreak = 'break-word';
+    
+    // No translation UI for image popups
+    popupEl.appendChild(body);
+    container.appendChild(popupEl);
+
+    return { bodyEl: body };
+  }
+
   function createOverlayForText(rect, text, sourceParagraphEl) {
     clearPopup();
     const container = ensureContainer();
@@ -1610,8 +2261,19 @@
   }
 
   async function openOverlayForElement(element, sourceParagraphEl, options = {}) {
+    if (!element) {
+      console.error('Element is undefined in openOverlayForElement');
+      return;
+    }
+    
     await scrollElementToTop(element);
     const rect = element.getBoundingClientRect();
+    
+    if (!rect) {
+      console.error('Failed to get bounding rect for element');
+      return;
+    }
+    
     const text = element.innerText || element.textContent || '';
     if (options.forcePopup) {
       createOverlayForText(rect, text, sourceParagraphEl || null);
@@ -1677,15 +2339,20 @@
   }
 
   function calculatePosition(rect) {
+    if (!rect) {
+      // Fallback position if rect is undefined
+      return { x: 100, y: 100, transform: 'translate(-50%, 0%)' };
+    }
+    
     const popupWidth = 320;
     const popupHeight = 200;
     const margin = 15;
     const viewportWidth = window.innerWidth;
 
-    const top = rect.top;
-    const bottom = rect.bottom;
-    const left = rect.left;
-    const width = rect.width;
+    const top = rect.top || 0;
+    const bottom = rect.bottom || 0;
+    const left = rect.left || 0;
+    const width = rect.width || 0;
 
     let y, transformY;
     if (rect.top > popupHeight + margin) {
@@ -1813,6 +2480,11 @@
           // Show translation in a separate floating tip below the selected sequence (do not replace overlay/popup)
           const firstRect = spans[0].getBoundingClientRect();
           const lastRect = spans[spans.length - 1].getBoundingClientRect();
+          
+          if (!firstRect || !lastRect) {
+            console.error('Failed to get bounding rect for spans');
+            return;
+          }
           const combinedRect = {
             top: firstRect.top,
             bottom: lastRect.bottom,
@@ -1822,6 +2494,10 @@
             height: lastRect.bottom - firstRect.top
           };
           const pos = calculatePosition(combinedRect);
+          if (!pos) {
+            console.error('Failed to calculate position for combined rect');
+            return;
+          }
           const { bodyEl } = createTipPopover(pos, selectedText, true);
           translate(selectedText, 'en', (msg)=>{ try { bodyEl.textContent = msg; } catch {} }).then((t) => {
             if (!tipEl) return;
@@ -1887,14 +2563,25 @@
       clickableNodes.clear();
       makeClickableParagraphs();
     }
+    
+    // Handle image fetch results from service worker
+    if (message.type === 'WEBLANG_IMAGE_FETCH_RESULT') {
+      const { id, ok, result, error } = message;
+      window.dispatchEvent(new CustomEvent('weblang-image-fetch-result', { 
+        detail: { id, ok, result, error } 
+      }));
+    }
   });
 
   // Initialize
   addClickableStyles();
   makeClickableParagraphs();
+  attachImageClickHandlers();
   const observer = new MutationObserver(() => {
     // Debounced update for new paragraphs
     makeClickableParagraphs();
+    // Also update image handlers for new images
+    attachImageClickHandlers();
   });
   observer.observe(document.body, { childList: true, subtree: true });
   document.addEventListener('mouseup', handleGlobalMouseUp, true);
