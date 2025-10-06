@@ -207,70 +207,6 @@
     }
   }
 
-
-
-  async function getVocabForUrl(url = null) {
-    try {
-      if (!chrome.storage || !chrome.storage.local) {
-        return [];
-      }
-
-      const targetUrl = url || window.location.href;
-      const urlKey = `weblang_vocab_${btoa(targetUrl).replace(/[^a-zA-Z0-9]/g, '')}`;
-      
-      const result = await new Promise((resolve, reject) => {
-        chrome.storage.local.get([urlKey], (data) => {
-          if (chrome.runtime.lastError) {
-            reject(chrome.runtime.lastError);
-          } else {
-            resolve(data);
-          }
-        });
-      });
-
-      return result[urlKey] || [];
-    } catch (error) {
-      console.error('Failed to get vocabulary for URL:', error);
-      return [];
-    }
-  }
-
-  async function getAllVocabUrls() {
-    try {
-      if (!chrome.storage || !chrome.storage.local) {
-        return [];
-      }
-
-      const result = await new Promise((resolve, reject) => {
-        chrome.storage.local.get(null, (data) => {
-          if (chrome.runtime.lastError) {
-            reject(chrome.runtime.lastError);
-          } else {
-            resolve(data);
-          }
-        });
-      });
-
-      const vocabUrls = [];
-      for (const key in result) {
-        if (key.startsWith('weblang_vocab_') && Array.isArray(result[key]) && result[key].length > 0) {
-          const url = result[key][0]?.url || 'Unknown URL';
-          vocabUrls.push({
-            url: url,
-            key: key,
-            count: result[key].length,
-            lastSaved: Math.max(...result[key].map(entry => entry.lastSaved || entry.savedAt || 0))
-          });
-        }
-      }
-
-      return vocabUrls.sort((a, b) => b.lastSaved - a.lastSaved);
-    } catch (error) {
-      console.error('Failed to get all vocabulary URLs:', error);
-      return [];
-    }
-  }
-
   async function getTranslator(sourceLanguage, targetLanguage, onProgress) {
     if (!('Translator' in self)) return null;
     const key = `${sourceLanguage}-${targetLanguage}`;
@@ -618,48 +554,6 @@
     translationBodyEl.appendChild(card);
   }
 
-  function setOverlayTitledCard(titleText, bodyText) {
-    if (!translationBodyEl) return;
-    translationBodyEl.innerHTML = '';
-    const card = document.createElement('div');
-    card.style.border = '1px solid rgba(75,85,99,0.9)';
-    card.style.background = 'rgba(17,24,39,0.9)';
-    card.style.borderRadius = '12px';
-    card.style.padding = '12px 14px';
-    card.style.boxShadow = '0 8px 22px rgba(0,0,0,0.30)';
-
-    const titleRow = document.createElement('div');
-    titleRow.style.display = 'flex';
-    titleRow.style.alignItems = 'center';
-    titleRow.style.justifyContent = 'space-between';
-    titleRow.style.marginBottom = '8px';
-
-    const title = document.createElement('span');
-    title.textContent = titleText || '';
-    title.style.fontSize = '13px';
-    title.style.letterSpacing = '0.3px';
-    title.style.color = 'rgba(209,213,219,0.9)';
-
-    const hr = document.createElement('div');
-    hr.style.height = '1px';
-    hr.style.background = 'rgba(75,85,99,0.6)';
-    hr.style.margin = '4px 0 8px 0';
-
-    const text = document.createElement('div');
-    text.style.fontSize = '18px';
-    text.style.lineHeight = '1.7';
-    text.style.color = '#f3f4f6';
-    text.style.whiteSpace = 'pre-wrap';
-    text.style.wordBreak = 'break-word';
-    text.textContent = bodyText || '';
-
-    titleRow.appendChild(title);
-    card.appendChild(titleRow);
-    card.appendChild(hr);
-    card.appendChild(text);
-    translationBodyEl.appendChild(card);
-  }
-
   function setPopupTitledCard(bodyEl, titleText, bodyText) {
     if (!bodyEl) return;
     const card = document.createElement('div');
@@ -699,22 +593,6 @@
     card.appendChild(hr);
     card.appendChild(text);
     bodyEl.appendChild(card);
-  }
-
-  function setPopupQuestionView(bodyEl, questionText) {
-    if (!bodyEl) return;
-    bodyEl.innerHTML = '';
-    const words = document.createElement('div');
-    words.style.lineHeight = '1.8';
-    words.style.fontSize = '19px';
-    words.style.color = '#e5e7eb';
-    words.style.marginBottom = '8px';
-    renderClickableWords(words, questionText);
-    bodyEl.appendChild(words);
-    // create a titled card below words; caller will fill translated text
-    // initialize with original question for now
-    setPopupTitledCard(bodyEl, 'Question', questionText || '');
-    popupWordsContainerEl = words;
   }
 
   function renderQuestionClickableBlock(targetEl, text, beforeEl) {
@@ -1221,8 +1099,6 @@
     // Use the same response controls as text popups
     attachResponseControls(container, targetLang);
   }
-
-
 
   function attachResponseControls(targetEl, detectedLang) {
     const lang = (detectedLang && detectedLang !== 'unknown') ? detectedLang : getDocumentLanguage() || 'en';
