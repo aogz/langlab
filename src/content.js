@@ -66,144 +66,32 @@
 
   async function saveWordToVocab(translationText) {
     try {
-      if (!chrome.storage || !chrome.storage.local) {
-        throw new Error('Storage not available');
-      }
-
-      // Get the selected word from the current selection
-      const selectedWord = selectedWords.join(' ') || '';
-      if (!selectedWord || !translationText) {
-        throw new Error('No word or translation to save');
-      }
-
-      const currentUrl = window.location.href;
-      const urlKey = `weblang_vocab_${btoa(currentUrl).replace(/[^a-zA-Z0-9]/g, '')}`;
-      
-      // Get existing vocabulary for this URL
-      const result = await new Promise((resolve, reject) => {
-        chrome.storage.local.get([urlKey], (data) => {
-          if (chrome.runtime.lastError) {
-            reject(chrome.runtime.lastError);
-          } else {
-            resolve(data);
-          }
-        });
-      });
-
-      const existingVocab = result[urlKey] || [];
-      
-      // Check if word already exists
-      const existingEntry = existingVocab.find(entry => 
-        entry.word.toLowerCase() === selectedWord.toLowerCase()
-      );
-
-      if (existingEntry) {
-        // Update existing entry
-        existingEntry.translation = translationText;
-        existingEntry.lastSaved = Date.now();
-      } else {
-        // Add new entry
-        existingVocab.push({
-          word: selectedWord,
-          translation: translationText,
-          url: currentUrl,
-          savedAt: Date.now(),
-          lastSaved: Date.now()
-        });
-      }
-
-      // Save back to storage
-      await new Promise((resolve, reject) => {
-        chrome.storage.local.set({ [urlKey]: existingVocab }, () => {
-          if (chrome.runtime.lastError) {
-            reject(chrome.runtime.lastError);
-          } else {
-            resolve();
-          }
-        });
-      });
-
-      console.log('Word saved to vocabulary:', { word: selectedWord, translation: translationText, url: currentUrl });
-      
-      // Wait for language detection to complete, then save to sidebar
       let detectedLanguage = currentDetectedLanguage;
       if (window.currentLanguageDetectionPromise) {
         try {
           detectedLanguage = await window.currentLanguageDetectionPromise;
-          console.log('Language detection completed:', detectedLanguage);
         } catch (error) {
           console.error('Error waiting for language detection:', error);
         }
       }
-      console.log('Saving words with language:', detectedLanguage);
-      await saveWordsToSidebar(selectedWords, currentUrl, document.title, translationText, detectedLanguage);
-      
-      // Return result for UI feedback
-      return {
-        success: true,
-        isNewWord: !existingEntry,
-        word: selectedWord
-      };
+
+      const response = await chrome.runtime.sendMessage({
+        type: 'SAVE_WORD_TO_VOCAB',
+        selectedWord: selectedWords.join(' ') || '',
+        translationText: translationText,
+        url: window.location.href,
+        title: document.title,
+        detectedLanguage: detectedLanguage
+      });
+
+      if (response && response.success) {
+        return response;
+      } else {
+        throw new Error(response.error || 'Failed to save word');
+      }
     } catch (error) {
       console.error('Failed to save word to vocabulary:', error);
       throw error;
-    }
-  }
-
-  // New function to save words to sidebar storage
-  async function saveWordsToSidebar(words, url, title, translation, sourceLanguage) {
-    try {
-      // Get existing words from sidebar storage
-      const result = await chrome.storage.local.get(['langlabSavedWords']);
-      const existingWords = result.langlabSavedWords || [];
-      
-      // Filter out words that already exist for this URL
-      const newWords = words.filter(word => 
-        !existingWords.some(existing => 
-          existing.word.toLowerCase() === word.toLowerCase() && 
-          existing.url === url
-        )
-      );
-
-      if (newWords.length === 0) {
-        console.log('All selected words already exist for this URL');
-        return { success: false, reason: 'already_exists' };
-      }
-
-      // Create new word objects
-      const timestamp = Date.now();
-      const wordsToAdd = newWords.map(word => ({
-        id: `${url}-${word}-${timestamp}-${Math.random()}`,
-        word: word,
-        translation: translation || '',
-        url: url,
-        title: title || url,
-        timestamp: timestamp,
-        domain: getDomainFromUrl(url),
-        sourceLanguage: sourceLanguage || 'unknown',
-        correctAnswers: 0,
-        isKnown: false
-      }));
-
-      // Add to existing words and save
-      const updatedWords = [...existingWords, ...wordsToAdd];
-      await chrome.storage.local.set({ langlabSavedWords: updatedWords });
-      
-      console.log('Saved words to sidebar storage:', wordsToAdd.length);
-      return { success: true, newWordsCount: wordsToAdd.length };
-    } catch (error) {
-      console.error('Failed to save words to sidebar storage:', error);
-      return { success: false, error: error.message };
-    }
-  }
-
-  // Helper function to get domain from URL
-  function getDomainFromUrl(url) {
-    try {
-      const urlObj = new URL(url);
-      return urlObj.hostname;
-    } catch {
-      return url;
     }
   }
 
@@ -2481,5 +2369,4 @@
   document.addEventListener('mousedown', handleClickOutside, true);
   document.addEventListener('mousedown', handleDocumentMouseDown, true);
 })();
-
 

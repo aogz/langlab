@@ -38,6 +38,8 @@ chrome.action.onClicked.addListener(async (tab) => {
   }
 });
 
+import { saveWordsToSidebar } from './utils.js';
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || !sender) return;
   
@@ -284,6 +286,87 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
     });
   }
+
+  if (message.type === 'SAVE_WORD_TO_VOCAB') {
+    const { selectedWord, translationText, url, title, detectedLanguage } = message;
+    saveWordToVocab(selectedWord, translationText, url, title, detectedLanguage)
+      .then(response => sendResponse(response))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true; // Indicates that the response is sent asynchronously
+  }
 });
+
+function getDomainFromUrl(url) {
+  try {
+    const urlObj = new URL(url);
+    return urlObj.hostname;
+  } catch {
+    return url;
+  }
+}
+
+async function saveWordToVocab(selectedWord, translationText, url, title, detectedLanguage) {
+  try {
+    if (!chrome.storage || !chrome.storage.local) {
+      throw new Error('Storage not available');
+    }
+
+    if (!selectedWord || !translationText) {
+      throw new Error('No word or translation to save');
+    }
+
+    const urlKey = `weblang_vocab_${btoa(url).replace(/[^a-zA-Z0-9]/g, '')}`;
+
+    const result = await new Promise((resolve, reject) => {
+      chrome.storage.local.get([urlKey], (data) => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve(data);
+        }
+      });
+    });
+
+    const existingVocab = result[urlKey] || [];
+
+    const existingEntry = existingVocab.find(entry =>
+      entry.word.toLowerCase() === selectedWord.toLowerCase()
+    );
+
+    if (existingEntry) {
+      existingEntry.translation = translationText;
+      existingEntry.lastSaved = Date.now();
+    } else {
+      existingVocab.push({
+        word: selectedWord,
+        translation: translationText,
+        url: url,
+        savedAt: Date.now(),
+        lastSaved: Date.now()
+      });
+    }
+
+    await new Promise((resolve, reject) => {
+      chrome.storage.local.set({ [urlKey]: existingVocab }, () => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve();
+        }
+      });
+    });
+
+    await saveWordsToSidebar([selectedWord], url, title, translationText, detectedLanguage);
+
+    return {
+      success: true,
+      isNewWord: !existingEntry,
+      word: selectedWord
+    };
+  } catch (error) {
+    console.error('Failed to save word to vocabulary:', error);
+    throw error;
+  }
+}
 
 
