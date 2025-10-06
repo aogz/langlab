@@ -983,15 +983,6 @@
     
     body.appendChild(imgPreview);
     
-    // Add question label
-    const label = document.createElement('div');
-    label.textContent = 'Question about this image:';
-    label.style.color = '#e5e7eb';
-    label.style.fontSize = '14px';
-    label.style.marginBottom = '8px';
-    label.style.fontWeight = '500';
-    body.appendChild(label);
-    
     // Set popupBodyRef for image popups (needed by buildControlsBar)
     popupBodyRef = body;
     
@@ -1007,23 +998,41 @@
   
   async function generateImageQuestion(img, container) {
     try {
-      // Show loading state without clearing the image
-      const loadingDiv = document.createElement('div');
-      loadingDiv.style.color = '#e5e7eb';
-      loadingDiv.style.fontSize = '16px';
-      loadingDiv.style.fontStyle = 'italic';
-      loadingDiv.style.textAlign = 'center';
-      loadingDiv.style.padding = '10px';
-      loadingDiv.textContent = 'Generating question…';
-      container.appendChild(loadingDiv);
+      // Show loading state with same styling as text popups
+      const wrapper = document.createElement('div');
+      wrapper.style.display = 'flex';
+      wrapper.style.alignItems = 'center';
+      wrapper.style.gap = '10px';
+      wrapper.style.padding = '6px 8px';
+      wrapper.style.border = '1px dashed rgba(75,85,99,0.7)';
+      wrapper.style.borderRadius = '10px';
+      wrapper.style.background = 'rgba(31,41,55,0.6)';
+      wrapper.style.marginBottom = '12px';
+      
+      const dot = document.createElement('div');
+      dot.style.width = '10px';
+      dot.style.height = '10px';
+      dot.style.borderRadius = '9999px';
+      dot.style.background = '#60a5fa';
+      dot.style.opacity = '0.9';
+      
+      const text = document.createElement('div');
+      text.style.fontSize = '16px';
+      text.style.color = '#e5e7eb';
+      text.textContent = 'Generating question…';
+      
+      wrapper.appendChild(dot);
+      wrapper.appendChild(text);
+      container.appendChild(wrapper);
       
       // Get image data via service worker to bypass CORS
       let imageData;
       try {
         imageData = await getImageDataViaServiceWorker(img);
       } catch (error) {
-        loadingDiv.textContent = `Error: ${error.message}`;
-        loadingDiv.style.color = '#ef4444';
+        text.textContent = `Error: ${error.message}`;
+        text.style.color = '#ef4444';
+        dot.style.background = '#ef4444';
         return;
       }
       
@@ -1049,8 +1058,9 @@
         console.log('Base64 conversion complete, length:', base64Data.length, 'mimeType:', mimeType);
         } catch (error) {
           console.error('Error converting blob to base64:', error);
-          loadingDiv.textContent = `Error: ${error.message}`;
-          loadingDiv.style.color = '#ef4444';
+          text.textContent = `Error: ${error.message}`;
+          text.style.color = '#ef4444';
+          dot.style.background = '#ef4444';
           return;
         }
       
@@ -1058,7 +1068,7 @@
       const requestId = `weblang_image_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       
       return new Promise((resolve, reject) => {
-        const onResult = (e) => {
+        const onResult = async (e) => {
           try {
             if (!e || !e.detail || e.detail.id !== requestId) return;
             window.removeEventListener('weblang-image-result', onResult, true);
@@ -1066,13 +1076,14 @@
             if (e.detail.ok) {
               const question = e.detail.result || '';
               if (question) {
-                displayImageQuestion(question, container, img);
+                await displayImageQuestion(question, container, img);
               }
               resolve(question);
             } else {
               const errMsg = e.detail.error || 'Failed to generate question';
-              loadingDiv.textContent = `Error: ${errMsg}`;
-              loadingDiv.style.color = '#ef4444';
+              text.textContent = `Error: ${errMsg}`;
+              text.style.color = '#ef4444';
+              dot.style.background = '#ef4444';
               reject(new Error(errMsg));
             }
           } catch (err) {
@@ -1085,8 +1096,9 @@
         // Add timeout to prevent hanging
         const timeoutId = setTimeout(() => {
           window.removeEventListener('weblang-image-result', onResult, true);
-          loadingDiv.textContent = 'Timeout: Request took too long';
-          loadingDiv.style.color = '#ef4444';
+          text.textContent = 'Timeout: Request took too long';
+          text.style.color = '#ef4444';
+          dot.style.background = '#ef4444';
           reject(new Error('Image question generation timeout'));
         }, 30000); // 30 second timeout
         
@@ -1191,18 +1203,23 @@
     });
   }
   
-  function displayImageQuestion(question, container, img) {
-    // Remove the loading div
-    const loadingDiv = container.querySelector('div[style*="font-style: italic"]');
-    if (loadingDiv) {
-      loadingDiv.remove();
+  async function displayImageQuestion(question, container, img) {
+    // Remove the loading wrapper
+    const loadingWrapper = container.querySelector('div[style*="border: 1px dashed"]');
+    if (loadingWrapper) {
+      loadingWrapper.remove();
     }
     
+    // Translate the question to user's language (same as text popups)
+    const targetLang = getDocumentLanguage() || 'en';
+    const translated = await translateTo(question, targetLang, 'en');
+    const finalQuestion = translated || question || '';
+    
     // Use the same question display as text popups with proper styling
-    const wordsEl = renderQuestionClickableBlock(container, question);
+    const wordsEl = renderQuestionClickableBlock(container, finalQuestion);
     
     // Use the same response controls as text popups
-    attachResponseControls(container, getDocumentLanguage() || 'en');
+    attachResponseControls(container, targetLang);
   }
 
 
