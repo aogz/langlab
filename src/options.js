@@ -1,78 +1,5 @@
 (() => {
-  // Comprehensive list of languages with their codes and flags
-  const languages = [
-    { code: 'en', name: 'English', flag: '🇺🇸' },
-    { code: 'es', name: 'Spanish', flag: '🇪🇸' },
-    { code: 'fr', name: 'French', flag: '🇫🇷' },
-    { code: 'de', name: 'German', flag: '🇩🇪' },
-    { code: 'it', name: 'Italian', flag: '🇮🇹' },
-    { code: 'pt', name: 'Portuguese', flag: '🇵🇹' },
-    { code: 'ru', name: 'Russian', flag: '🇷🇺' },
-    { code: 'ja', name: 'Japanese', flag: '🇯🇵' },
-    { code: 'ko', name: 'Korean', flag: '🇰🇷' },
-    { code: 'zh', name: 'Chinese', flag: '🇨🇳' },
-    { code: 'ar', name: 'Arabic', flag: '🇸🇦' },
-    { code: 'hi', name: 'Hindi', flag: '🇮🇳' },
-    { code: 'nl', name: 'Dutch', flag: '🇳🇱' },
-    { code: 'sv', name: 'Swedish', flag: '🇸🇪' },
-    { code: 'no', name: 'Norwegian', flag: '🇳🇴' },
-    { code: 'da', name: 'Danish', flag: '🇩🇰' },
-    { code: 'fi', name: 'Finnish', flag: '🇫🇮' },
-    { code: 'pl', name: 'Polish', flag: '🇵🇱' },
-    { code: 'cs', name: 'Czech', flag: '🇨🇿' },
-    { code: 'hu', name: 'Hungarian', flag: '🇭🇺' },
-    { code: 'ro', name: 'Romanian', flag: '🇷🇴' },
-    { code: 'bg', name: 'Bulgarian', flag: '🇧🇬' },
-    { code: 'hr', name: 'Croatian', flag: '🇭🇷' },
-    { code: 'sk', name: 'Slovak', flag: '🇸🇰' },
-    { code: 'sl', name: 'Slovenian', flag: '🇸🇮' },
-    { code: 'et', name: 'Estonian', flag: '🇪🇪' },
-    { code: 'lv', name: 'Latvian', flag: '🇱🇻' },
-    { code: 'lt', name: 'Lithuanian', flag: '🇱🇹' },
-    { code: 'el', name: 'Greek', flag: '🇬🇷' },
-    { code: 'tr', name: 'Turkish', flag: '🇹🇷' },
-    { code: 'he', name: 'Hebrew', flag: '🇮🇱' },
-    { code: 'th', name: 'Thai', flag: '🇹🇭' },
-    { code: 'vi', name: 'Vietnamese', flag: '🇻🇳' },
-    { code: 'id', name: 'Indonesian', flag: '🇮🇩' },
-    { code: 'ms', name: 'Malay', flag: '🇲🇾' },
-    { code: 'tl', name: 'Filipino', flag: '🇵🇭' },
-    { code: 'uk', name: 'Ukrainian', flag: '🇺🇦' },
-    { code: 'be', name: 'Belarusian', flag: '🇧🇾' },
-    { code: 'ka', name: 'Georgian', flag: '🇬🇪' },
-    { code: 'hy', name: 'Armenian', flag: '🇦🇲' },
-    { code: 'az', name: 'Azerbaijani', flag: '🇦🇿' },
-    { code: 'kk', name: 'Kazakh', flag: '🇰🇿' },
-    { code: 'ky', name: 'Kyrgyz', flag: '🇰🇬' },
-    { code: 'uz', name: 'Uzbek', flag: '🇺🇿' },
-    { code: 'mn', name: 'Mongolian', flag: '🇲🇳' },
-    { code: 'ne', name: 'Nepali', flag: '🇳🇵' },
-    { code: 'si', name: 'Sinhala', flag: '🇱🇰' },
-    { code: 'ta', name: 'Tamil', flag: '🇱🇰' },
-    { code: 'te', name: 'Telugu', flag: '🇮🇳' },
-    { code: 'ml', name: 'Malayalam', flag: '🇮🇳' },
-    { code: 'kn', name: 'Kannada', flag: '🇮🇳' },
-    { code: 'gu', name: 'Gujarati', flag: '🇮🇳' },
-    { code: 'pa', name: 'Punjabi', flag: '🇮🇳' },
-    { code: 'bn', name: 'Bengali', flag: '🇧🇩' },
-    { code: 'ur', name: 'Urdu', flag: '🇵🇰' },
-    { code: 'fa', name: 'Persian', flag: '🇮🇷' },
-    { code: 'ps', name: 'Pashto', flag: '🇦🇫' },
-    { code: 'sw', name: 'Swahili', flag: '🇰🇪' },
-    { code: 'am', name: 'Amharic', flag: '🇪🇹' },
-    { code: 'yo', name: 'Yoruba', flag: '🇳🇬' },
-    { code: 'ig', name: 'Igbo', flag: '🇳🇬' },
-    { code: 'ha', name: 'Hausa', flag: '🇳🇬' },
-    { code: 'zu', name: 'Zulu', flag: '🇿🇦' },
-    { code: 'af', name: 'Afrikaans', flag: '🇿🇦' },
-    { code: 'is', name: 'Icelandic', flag: '🇮🇸' },
-    { code: 'ga', name: 'Irish', flag: '🇮🇪' },
-    { code: 'cy', name: 'Welsh', flag: '🇬🇧' },
-    { code: 'mt', name: 'Maltese', flag: '🇲🇹' },
-    { code: 'eu', name: 'Basque', flag: '🇪🇸' },
-    { code: 'ca', name: 'Catalan', flag: '🇪🇸' },
-    { code: 'gl', name: 'Galician', flag: '🇪🇸' }
-  ];
+  const { languages, populateLanguageSelect, checkLanguagePairAvailability } = window.langlab;
 
   const userLangEl = document.getElementById('userLang');
   const learnLangEl = document.getElementById('learnLang');
@@ -80,41 +7,10 @@
   const resetBtn = document.getElementById('resetBtn');
   const statusEl = document.getElementById('status');
 
-  // Check if Translator API is supported
-  const isTranslatorSupported = 'Translator' in self;
-  let supportedLanguagePairs = new Map();
-
   function showStatus(msg) {
     statusEl.textContent = msg || '';
     if (!msg) return;
     setTimeout(() => { statusEl.textContent = ''; }, 1500);
-  }
-
-  // Check if a language pair is supported by the Translator API
-  async function checkLanguagePairAvailability(sourceLang, targetLang) {
-    if (!isTranslatorSupported) {
-      return 'unknown'; // Assume supported if API not available
-    }
-
-    const pairKey = `${sourceLang}-${targetLang}`;
-    
-    // Return cached result if available
-    if (supportedLanguagePairs.has(pairKey)) {
-      return supportedLanguagePairs.get(pairKey);
-    }
-
-    try {
-      const availability = await Translator.availability({
-        sourceLanguage: sourceLang,
-        targetLanguage: targetLang
-      });
-      
-      supportedLanguagePairs.set(pairKey, availability);
-      return availability;
-    } catch (error) {
-      console.warn(`Failed to check availability for ${sourceLang}-${targetLang}:`, error);
-      return 'unknown';
-    }
   }
 
   // Update learning language options based on native language selection
@@ -204,23 +100,6 @@
     } finally {
       learnLangEl.disabled = false;
     }
-  }
-
-  // Populate language dropdowns
-  function populateLanguageSelect(selectElement, placeholder = 'Select language') {
-    // Add placeholder option
-    const placeholderOption = document.createElement('option');
-    placeholderOption.value = '';
-    placeholderOption.textContent = placeholder;
-    selectElement.appendChild(placeholderOption);
-
-    // Add language options
-    languages.forEach(lang => {
-      const option = document.createElement('option');
-      option.value = lang.code;
-      option.textContent = `${lang.flag} ${lang.name}`;
-      selectElement.appendChild(option);
-    });
   }
 
   function load() {
