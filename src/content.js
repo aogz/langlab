@@ -3,7 +3,6 @@
 
 (() => {
   const EXT_CLS_PREFIX = 'weblang-ext';
-  const ACTIVATION_MODIFIER = 'altKey'; // Hold Alt/Option to activate overlay on arbitrary blocks
 
   let isDragging = false;
   let selectionStartIndex = null;
@@ -17,7 +16,6 @@
   let activeParagraphEl = null;
   let hoverOverlayEl = null;
   let backdropEl = null;
-  let languageDetectorPromise = null;
   let popupBodyRef = null;
   let popupWordsContainerEl = null;
   let overlayWordsContainerEl = null;
@@ -31,12 +29,18 @@
 
   const progressCallbacks = new Map();
 
+  const tooltip = createElement('div', `${EXT_CLS_PREFIX}-tooltip`, {}, { id: `${EXT_CLS_PREFIX}-tooltip`, innerText: '🧪 Click to learn in LangLab' });
+  document.body.appendChild(tooltip);
+
   // ========== UTILITY FUNCTIONS ==========
   
-  function createElement(tag, className, styles = {}) {
+  function createElement(tag, className, styles = {}, attributes = {}) {
     const el = document.createElement(tag);
     if (className) el.className = className;
     applyStyles(el, styles);
+    for (const [key, value] of Object.entries(attributes)) {
+      el[key] = value;
+    }
     return el;
   }
 
@@ -218,32 +222,6 @@
     popupBodyRef = null;
   }
 
-  function repositionPopupForSidebar() {
-    if (!popupEl) return;
-    
-    // Get current popup position
-    const rect = popupEl.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const sidebarWidth = 400; // Approximate sidebar width
-    
-    // Check if popup is on the right side and might overlap with sidebar
-    const isOnRightSide = rect.left > viewportWidth / 2;
-    
-    if (isOnRightSide) {
-      // Move popup to the left to avoid sidebar overlap
-      const newLeft = Math.max(20, viewportWidth - sidebarWidth - rect.width - 20);
-      popupEl.style.left = `${newLeft}px`;
-      
-      // Add a subtle animation
-      popupEl.style.transition = 'left 0.3s ease';
-      setTimeout(() => {
-        if (popupEl) {
-          popupEl.style.transition = '';
-        }
-      }, 300);
-    }
-  }
-
   function ensureBackdrop() {
     const container = ensureContainer();
     if (backdropEl && container.contains(backdropEl)) return backdropEl;
@@ -283,10 +261,8 @@
       pointerEvents: 'auto',
       background: 'rgba(17,24,39,0.98)',
       color: '#e5e7eb',
-      borderRadius: '8px',
-      boxShadow: '0 12px 24px rgba(0,0,0,0.25)',
-      padding: '6px',
-      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif',
+      borderRadius: '12px',
+      boxShadow: '0 12px 24px rgba(0,0,0,0.75)',
       zIndex: '2147483647'
     });
 
@@ -308,7 +284,6 @@
       fontSize: '13px',
       color: '#e5e7eb',
       wordBreak: 'break-word',
-      marginBottom: '6px'
     });
     body.textContent = isTranslating ? 'Translating…' : (text || '');
     tipEl.appendChild(body);
@@ -401,7 +376,7 @@
   function showTranslationResult(container, resultText) {
     if (!container) return;
     container.innerHTML = '';
-        
+    
     const card = createElement('div', '', {
       border: '1px solid rgba(75,85,99,0.9)',
       background: 'rgba(17,24,39,0.9)',
@@ -600,7 +575,7 @@
       textShadow: '0 1px 2px rgba(0,0,0,0.3)',
       animation: 'weblang-gradient-pulse 3s ease-in-out infinite'
     });
-    button.textContent = '🤖 Discuss in LangLab';
+    button.textContent = '🧪 Discuss in LangLab';
     
     // Add hover effects
     button.addEventListener('mouseenter', () => {
@@ -966,11 +941,15 @@
     const finalQuestion = await translateQuestionToLearningLanguage(question);
     const targetLang = (await getLearningLanguage()) || getDocumentLanguage() || 'en';
     
+    const inputContainer = container.querySelector(`.${EXT_CLS_PREFIX}-input-container`);
+    
     // Use the same question display as text popups with proper styling
-    const wordsEl = renderQuestionClickableBlock(container, finalQuestion);
+    renderQuestionClickableBlock(container, finalQuestion, inputContainer);
     
     // Use the same response controls as text popups
-    attachResponseControls(container, targetLang);
+    if (!inputContainer) {
+      attachResponseControls(container, targetLang);
+    }
   }
 
   function attachResponseControls(targetEl, detectedLang) {
@@ -1565,7 +1544,7 @@
         const msg = (e && e.message) ? e.message : 'Unable to generate a question.';
         if (context === 'popup') {
           if (popupBodyRef) setPopupTranslationResult(popupBodyRef, msg);
-        } 
+        }
 
         throw e;
       } finally {
@@ -1583,18 +1562,11 @@
         // Open the sidebar
         await chrome.runtime.sendMessage({ type: 'OPEN_SIDEBAR' });
         
-        // Reposition popup to avoid sidebar overlap
-        if (popupEl) {
-          repositionPopupForSidebar();
-        }
       } catch (error) {
         console.error('Failed to open sidebar:', error);
         // Fallback: try to open sidebar directly
         try {
           await chrome.sidePanel.open();
-          if (popupEl) {
-            repositionPopupForSidebar();
-          }
         } catch (fallbackError) {
           console.error('Fallback sidebar open also failed:', fallbackError);
         }
@@ -1644,9 +1616,9 @@
     popupEl = createElement('div', `${EXT_CLS_PREFIX}-popup`, {
       position: 'fixed',
       left: `${position.x}px`,
-      top: `${position.y}px`,
+      top: `48px`,
       transform: position.transform,
-      width: '380px',
+      width: '480px',
       pointerEvents: 'auto',
       background: 'rgba(17,24,39,0.96)',
       border: '1px solid rgba(75,85,99,0.9)',
@@ -1665,7 +1637,7 @@
       marginBottom: '8px',
       wordBreak: 'break-word'
     });
-
+    
     // No translation UI for image popups
     popupEl.appendChild(body);
     container.appendChild(popupEl);
@@ -1681,7 +1653,7 @@
     popupEl = createElement('div', `${EXT_CLS_PREFIX}-overlay`, {
       position: 'fixed',
       left: `${rect.left}px`,
-      top: `${rect.top}px`,
+      top: `48px`,
       width: `${rect.width}px`,
       overflow: 'visible',
       pointerEvents: 'auto',
@@ -1742,7 +1714,6 @@
     if (sourceParagraphEl) {
       activeParagraphEl = sourceParagraphEl;
       // Remove hover overlay and clickable styling while active
-      detachHoverOverlay();
       activeParagraphEl.classList.remove(`${EXT_CLS_PREFIX}-clickable`, `${EXT_CLS_PREFIX}-selected`);
     } else {
       activeParagraphEl = null;
@@ -1756,62 +1727,54 @@
     wordOrder = [];
   }
 
-  function addClickableStyles() {
-    const styleId = `${EXT_CLS_PREFIX}-clickable-styles`;
+  const addClickableStyles = () => {
+    const styleId = `${EXT_CLS_PREFIX}-styles`;
     if (document.getElementById(styleId)) return;
+ 
+    const styles = {
+      [`.${EXT_CLS_PREFIX}-clickable`]: {
+        'cursor': 'pointer',
+        'position': 'relative',
+        'transition': 'background-color 0.15s ease, border-color 0.15s ease',
+        'border-radius': '8px',
+        'padding': '4px',
+        'border': '2px solid transparent',
+      },
+      [`.${EXT_CLS_PREFIX}-clickable:hover`]: {
+        'background-color': 'rgba(59,130,246,0.08)',
+        'border-color': 'rgba(59,130,246,0.5)',
+      },
+      [`.${EXT_CLS_PREFIX}-selected`]: {
+        'background-color': 'rgba(59,130,246,0.12) !important',
+        'box-shadow': 'inset 3px 0 0 rgba(59,130,246,0.7)',
+      },
+      [`#${EXT_CLS_PREFIX}-tooltip`]: {
+        'position': 'fixed',
+        'display': 'none',
+        'padding': '4px 8px',
+        'background': 'rgba(0,0,0,0.8)',
+        'color': 'white',
+        'border-radius': '4px',
+        'font-size': '14px',
+        'font-family': 'sans-serif',
+        'z-index': '2147483647',
+        'pointer-events': 'none',
+        'white-space': 'nowrap',
+      },
+    };
+ 
+    function stylesToString(styles) {
+      return Object.entries(styles).map(([selector, rules]) => {
+        const rulesString = Object.entries(rules).map(([property, value]) => `${property}: ${value};`).join(' ');
+        return `${selector} { ${rulesString} }`;
+      }).join(' ');
+    }
+    
     const style = createElement('style');
     style.id = styleId;
-    style.textContent = `
-.${EXT_CLS_PREFIX}-clickable { cursor: pointer; position: relative; transition: background-color 0.15s ease, box-shadow 0.15s ease; border-radius: 4px; }
-.${EXT_CLS_PREFIX}-clickable:hover { background-color: rgba(59,130,246,0.08); box-shadow: inset 3px 0 0 rgba(59,130,246,0.5); }
-.${EXT_CLS_PREFIX}-selected { background-color: rgba(59,130,246,0.12) !important; box-shadow: inset 3px 0 0 rgba(59,130,246,0.7); }
-`;
+    style.textContent = stylesToString(styles);
     document.head.appendChild(style);
-  }
-
-  function attachHoverOverlay(paragraphEl) {
-    if (popupEl) return; // Don't show hover decoration when overlay is open
-    detachHoverOverlay();
-    try {
-      hoverOverlayEl = createElement('div', `${EXT_CLS_PREFIX}-hover-overlay`, {
-        position: 'absolute',
-        inset: '0',
-        pointerEvents: 'none',
-        background: 'linear-gradient(to bottom, rgba(59,130,246,0.10), rgba(59,130,246,0.14))',
-        borderRadius: getComputedStyle(paragraphEl).borderRadius || '4px',
-        boxShadow: 'inset 0 0 0 1px rgba(75,85,99,0.65), 0 8px 20px rgba(0,0,0,0.18)',
-        transition: 'opacity 120ms ease',
-        opacity: '1'
-      });
-      paragraphEl.appendChild(hoverOverlayEl);
-    } catch {}
-  }
-
-  function detachHoverOverlay() {
-    if (hoverOverlayEl && hoverOverlayEl.parentNode) {
-      try { hoverOverlayEl.parentNode.removeChild(hoverOverlayEl); } catch {}
-    }
-    hoverOverlayEl = null;
-  }
-
-  async function scrollElementToTop(element) {
-    try {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
-    } catch {
-      try { element.scrollIntoView(true); } catch {}
-    }
-    const maxWaitMs = 1200;
-    const start = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-    let lastTop = null;
-    // Wait until the element is near the top or scrolling stabilizes
-    while (((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - start) < maxWaitMs) {
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-      const rect = element.getBoundingClientRect();
-      if (rect.top <= 8) break; // close enough to top
-      if (lastTop !== null && Math.abs(rect.top - lastTop) < 0.5) break; // stopped moving
-      lastTop = rect.top;
-    }
-  }
+  };
 
   async function openOverlayForElement(element, sourceParagraphEl, options = {}) {
     if (!element) {
@@ -1819,7 +1782,7 @@
       return;
     }
     
-    await scrollElementToTop(element);
+    element.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
     const rect = element.getBoundingClientRect();
     
     if (!rect) {
@@ -1828,28 +1791,6 @@
     }
     
     const text = element.innerText || element.textContent || '';
-    if (options.forcePopup) {
-      createOverlayForText(rect, text, sourceParagraphEl || null);
-      return;
-    }
-    // If user prefers native sidebar, route there instead of inline overlay
-    try {
-      const stored = await new Promise((resolve) => {
-        if (!chrome.storage || !chrome.storage.local) return resolve({ weblangPreferSidebar: preferSidebar });
-        chrome.storage.local.get(['weblangPreferSidebar'], (res) => resolve(res || {}));
-      });
-      if (stored && stored.weblangPreferSidebar) {
-        preferSidebar = true;
-        try { chrome.runtime && chrome.runtime.sendMessage({ type: 'WEBLANG_OPEN_SIDEBAR' }); } catch {}
-        try {
-          await openInNativeSidebar(text);
-          return;
-        } catch (e) {
-          // Fallback to popup if native sidebar fails
-          try { chrome.storage && chrome.storage.local && chrome.storage.local.set({ weblangPreferSidebar: false }); } catch {}
-        }
-      }
-    } catch {}
     createOverlayForText(rect, text, sourceParagraphEl || null);
   }
 
@@ -1871,8 +1812,6 @@
     const selection = window.getSelection && window.getSelection();
     if (selection && selection.type === 'Range' && selection.toString().trim().length > 0) return;
     const paragraph = event.currentTarget;
-    // Remove hover visuals and selection highlight when opening overlay
-    detachHoverOverlay();
     paragraph.classList.remove(`${EXT_CLS_PREFIX}-selected`);
     await openOverlayForElement(paragraph, paragraph);
   }
@@ -1884,10 +1823,20 @@
       if (!hasSubstantialText(p)) return;
       p.classList.add(`${EXT_CLS_PREFIX}-clickable`);
       p.addEventListener('click', handleParagraphClick, true);
-      p.addEventListener('mouseenter', () => attachHoverOverlay(p), true);
-      p.addEventListener('mouseleave', () => detachHoverOverlay(), true);
+
       clickableNodes.add(p);
-      if (!p.title) p.title = 'Click to open Weblang overlay';
+      p.addEventListener('mouseover', (e) => {
+        tooltip.style.display = 'block';
+      });
+
+      p.addEventListener('mouseout', (e) => {
+        tooltip.style.display = 'none';
+      });
+
+      p.addEventListener('mousemove', (e) => {
+        tooltip.style.left = `${e.clientX + 15}px`;
+        tooltip.style.top = `${e.clientY + 15}px`;
+      });
     });
   }
 
@@ -2041,6 +1990,44 @@
     }
   }
 
+  function handlePageTextSelection(event) {
+    // Ignore selections within the extension's popups/overlays
+    if (event.target.closest(`.${EXT_CLS_PREFIX}-overlay, .${EXT_CLS_PREFIX}-popup, .${EXT_CLS_PREFIX}-tip, .${EXT_CLS_PREFIX}-tooltip`)) {
+      return;
+    }
+
+    // Ignore if clicking on interactive elements, unless text is selected.
+    if (isInteractiveTarget(event.target) && window.getSelection().toString().trim().length === 0) {
+      return;
+    }
+
+    setTimeout(() => {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed) {
+        return;
+      }
+
+      const selectedText = selection.toString().trim();
+      // Only trigger for meaningful selections
+      if (selectedText.length > 1 && selectedText.split(' ').length < 100) {
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+
+        if (rect.width === 0 || rect.height === 0) {
+          return; // Don't show for empty selections
+        }
+
+        // Check if the selection is inside an editable element, but allow if it has content
+        const editableParent = range.startContainer.parentElement.closest('[contenteditable="true"]');
+        if (editableParent && selectedText.length === 0) {
+          return;
+        }
+
+        createOverlayForText(rect, selectedText, range.commonAncestorContainer.parentElement);
+      }
+    }, 10); // Use a small timeout to allow the selection to finalize
+  }
+
   function handleClickOutside(e) {
     const target = e.target;
     const insidePopup = popupEl && popupEl.contains(target);
@@ -2061,31 +2048,6 @@
         activeParagraphEl = null;
       }
     }
-  }
-
-  function findTextBlockElement(startEl) {
-    let el = startEl;
-    const disallowTags = /^(A|BUTTON|INPUT|TEXTAREA|SELECT|SCRIPT|STYLE|NOSCRIPT)$/i;
-    while (el && el !== document.body) {
-      if (el.nodeType === Node.ELEMENT_NODE) {
-        const tag = el.tagName || '';
-        if (disallowTags.test(tag)) return null;
-        const text = (el.innerText || el.textContent || '').trim();
-        if (text && text.length >= 20) return el;
-      }
-      el = el.parentElement;
-    }
-    return null;
-  }
-
-  async function handleDocumentMouseDown(e) {
-    if (!e[ACTIVATION_MODIFIER]) return; // Only when Alt/Option is held
-    if (popupEl && popupEl.contains(e.target)) return; // clicks inside overlay are fine
-    const el = findTextBlockElement(e.target);
-    if (!el) return;
-    e.preventDefault();
-    e.stopPropagation();
-    await openOverlayForElement(el, null);
   }
 
   // Listen for language settings updates
@@ -2115,14 +2077,11 @@
   makeClickableParagraphs();
   attachImageClickHandlers();
   const observer = new MutationObserver(() => {
-    // Debounced update for new paragraphs
     makeClickableParagraphs();
-    // Also update image handlers for new images
     attachImageClickHandlers();
   });
   observer.observe(document.body, { childList: true, subtree: true });
   document.addEventListener('mouseup', handleGlobalMouseUp, true);
+  document.addEventListener('mouseup', handlePageTextSelection, false);
   document.addEventListener('mousedown', handleClickOutside, true);
-  document.addEventListener('mousedown', handleDocumentMouseDown, true);
 })();
-
