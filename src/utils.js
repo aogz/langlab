@@ -101,14 +101,21 @@ export async function checkLanguagePairAvailability(sourceLang, targetLang) {
   }
 }
 
+function createElement(tag, className, styles = {}) {
+  const el = document.createElement(tag);
+  if (className) el.className = className;
+  Object.assign(el.style, styles);
+  return el;
+}
+
 export function populateLanguageSelect(selectElement, placeholder = 'Select language') {
-  const placeholderOption = document.createElement('option');
+  const placeholderOption = createElement('option');
   placeholderOption.value = '';
   placeholderOption.textContent = placeholder;
   selectElement.appendChild(placeholderOption);
 
   languages.forEach(lang => {
-    const option = document.createElement('option');
+    const option = createElement('option');
     option.value = lang.code;
     option.textContent = `${lang.flag} ${lang.name}`;
     selectElement.appendChild(option);

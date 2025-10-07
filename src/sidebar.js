@@ -14,6 +14,17 @@
   let correctAnswers = 0;
   let practiceMode = 'source-to-target'; // or 'target-to-source'
 
+  function createElement(tag, className, styles = {}) {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    Object.assign(el.style, styles);
+    return el;
+  }
+
+  function applyStyles(element, styles) {
+    Object.assign(element.style, styles);
+  }
+
   // Initialize the sidebar
   async function init() {
     console.log('Initializing sidebar...');
@@ -215,7 +226,7 @@
     
     // Add URL options with full URLs
     urls.forEach(url => {
-      const option = document.createElement('option');
+      const option = createElement('option');
       option.value = url;
       option.textContent = url; // Show full URL
       urlDropdown.appendChild(option);
@@ -383,11 +394,10 @@
     const sortedWords = words.sort((a, b) => b.timestamp - a.timestamp);
 
     // Create table
-    const table = document.createElement('table');
-    table.className = 'words-table';
+    const table = createElement('table', 'words-table');
     
     // Create header
-    const thead = document.createElement('thead');
+    const thead = createElement('thead');
     thead.innerHTML = `
       <tr>
         <th>Word</th>
@@ -400,7 +410,7 @@
     table.appendChild(thead);
 
     // Create body
-    const tbody = document.createElement('tbody');
+    const tbody = createElement('tbody');
     sortedWords.forEach(word => {
       const row = createWordRow(word);
       tbody.appendChild(row);
@@ -412,19 +422,16 @@
 
   // Create URL group element
   function createUrlGroup(group) {
-    const groupEl = document.createElement('div');
-    groupEl.className = 'url-group';
-    groupEl.style.marginBottom = '24px';
+    const groupEl = createElement('div', 'url-group', { marginBottom: '24px' });
 
     // URL header
-    const headerEl = document.createElement('div');
-    headerEl.style.cssText = `
-      background: rgba(31,41,55,0.5);
-      padding: 8px 12px;
-      border-radius: 6px;
-      margin-bottom: 8px;
-      border-left: 3px solid #2563eb;
-    `;
+    const headerEl = createElement('div', '', {
+      background: 'rgba(31,41,55,0.5)',
+      padding: '8px 12px',
+      borderRadius: '6px',
+      marginBottom: '8px',
+      borderLeft: '3px solid #2563eb'
+    });
     headerEl.innerHTML = `
       <div style="color: #60a5fa; font-weight: 500; font-size: 13px;">${group.url}</div>
       <div style="color: rgba(229,231,235,0.6); font-size: 11px; margin-top: 2px;">${group.words.length} word${group.words.length !== 1 ? 's' : ''}</div>
@@ -432,11 +439,10 @@
     groupEl.appendChild(headerEl);
 
     // Create table for words
-    const table = document.createElement('table');
-    table.className = 'words-table';
+    const table = createElement('table', 'words-table');
     
     // Create header
-    const thead = document.createElement('thead');
+    const thead = createElement('thead');
     thead.innerHTML = `
       <tr>
         <th>Word</th>
@@ -449,7 +455,7 @@
     table.appendChild(thead);
 
     // Create body
-    const tbody = document.createElement('tbody');
+    const tbody = createElement('tbody');
     // Sort words by timestamp (newest first)
     const sortedWords = group.words.sort((a, b) => b.timestamp - a.timestamp);
     sortedWords.forEach(word => {
@@ -464,7 +470,7 @@
 
   // Create word row element
   function createWordRow(word) {
-    const row = document.createElement('tr');
+    const row = createElement('tr');
     row.setAttribute('data-word-id', word.id);
     
     const language = word.sourceLanguage || 'unknown';
@@ -627,8 +633,7 @@
     optionsContainer.innerHTML = '';
     
     options.forEach((option, index) => {
-      const optionBtn = document.createElement('button');
-      optionBtn.className = 'option-btn';
+      const optionBtn = createElement('button', 'option-btn');
       optionBtn.textContent = option;
       optionBtn.addEventListener('click', () => selectAnswer(option, correctAnswer, optionBtn));
       optionsContainer.appendChild(optionBtn);

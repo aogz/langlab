@@ -8,6 +8,13 @@ import { languages, populateLanguageSelect, checkLanguagePairAvailability } from
   const skipBtn = document.getElementById('skipBtn');
   const availabilityStatus = document.getElementById('availabilityStatus');
 
+  function createElement(tag, className, styles = {}) {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    Object.assign(el.style, styles);
+    return el;
+  }
+
   // Update learning language options based on native language selection
   async function updateLearningLanguageOptions(currentLearningLang) {
     const selectedNativeLang = nativeSelect.value;
@@ -16,7 +23,7 @@ import { languages, populateLanguageSelect, checkLanguagePairAvailability } from
       // Reset to all languages
       learningSelect.innerHTML = '<option value="">Select language to learn</option>';
       languages.forEach(lang => {
-        const option = document.createElement('option');
+        const option = createElement('option');
         option.value = lang.code;
         option.textContent = `${lang.flag} ${lang.name}`;
         learningSelect.appendChild(option);
@@ -53,7 +60,7 @@ import { languages, populateLanguageSelect, checkLanguagePairAvailability } from
 
       // Add available languages first
       availableLanguages.forEach(lang => {
-        const option = document.createElement('option');
+        const option = createElement('option');
         option.value = lang.code;
         option.textContent = `${lang.flag} ${lang.name}`;
         learningSelect.appendChild(option);
@@ -61,16 +68,15 @@ import { languages, populateLanguageSelect, checkLanguagePairAvailability } from
 
       // Add unavailable languages with indication
       if (unavailableLanguages.length > 0) {
-        const separator = document.createElement('option');
+        const separator = createElement('option');
         separator.disabled = true;
         separator.textContent = '─── Limited support ───';
         learningSelect.appendChild(separator);
 
         unavailableLanguages.forEach(lang => {
-          const option = document.createElement('option');
+          const option = createElement('option', '', { color: '#9ca3af' });
           option.value = lang.code;
           option.textContent = `${lang.flag} ${lang.name} (limited)`;
-          option.style.color = '#9ca3af';
           learningSelect.appendChild(option);
         });
       }
@@ -86,7 +92,7 @@ import { languages, populateLanguageSelect, checkLanguagePairAvailability } from
       learningSelect.innerHTML = '<option value="">Select language to learn</option>';
       languages.forEach(lang => {
         if (lang.code !== selectedNativeLang) {
-          const option = document.createElement('option');
+          const option = createElement('option');
           option.value = lang.code;
           option.textContent = `${lang.flag} ${lang.name}`;
           learningSelect.appendChild(option);

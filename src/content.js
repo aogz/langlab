@@ -26,17 +26,111 @@
   let dragOffsetX = 0;
   let dragOffsetY = 0;
   let popupContentEl = null;
-  let isPopupCollapsed = false;
   let dragListenersAttached = false;
   let currentDetectedLanguage = 'unknown';
 
   const progressCallbacks = new Map();
 
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'TRANSLATION_PROGRESS' && progressCallbacks.has(message.requestId)) {
-      progressCallbacks.get(message.requestId)(message.message);
+  // ========== UTILITY FUNCTIONS ==========
+  
+  function createElement(tag, className, styles = {}) {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    applyStyles(el, styles);
+    return el;
+  }
+
+  function applyStyles(element, styles) {
+    for (const [key, value] of Object.entries(styles)) {
+      element.style[key] = value;
     }
-  });
+  }
+
+  const BUTTON_STYLES = {
+    lang: {
+      padding: '6px 10px',
+      background: 'rgba(31,41,55,0.6)',
+      border: '1px solid rgba(75,85,99,0.7)',
+      color: '#e5e7eb',
+      fontSize: '12px',
+      borderRadius: '8px',
+      cursor: 'default'
+    },
+    primary: {
+      padding: '8px 12px',
+      background: '#2563eb',
+      border: 'none',
+      color: '#fff',
+      fontSize: '13px',
+      borderRadius: '8px',
+      cursor: 'pointer'
+    },
+    secondary: {
+      padding: '8px 12px',
+      background: 'rgba(31,41,55,0.7)',
+      border: '1px solid rgba(75,85,99,0.8)',
+      color: '#e5e7eb',
+      fontSize: '13px',
+      borderRadius: '8px',
+      cursor: 'pointer'
+    },
+    save: {
+      width: '100%',
+      padding: '8px 12px',
+      background: '#10b981',
+      border: 'none',
+      color: '#fff',
+      borderRadius: '8px',
+      fontSize: '13px',
+      cursor: 'pointer',
+      marginTop: '12px',
+      fontWeight: '500'
+    }
+  };
+
+  function createButton(text, styleType = 'primary', onClick) {
+    const btn = createElement('button', '', BUTTON_STYLES[styleType]);
+    btn.textContent = text;
+    if (onClick) btn.addEventListener('click', onClick);
+    return btn;
+  }
+
+  function createSaveToVocabButton(translationText) {
+    const saveBtn = createButton('Add to Vocab', 'save');
+    
+    saveBtn.addEventListener('click', async () => {
+      try {
+        const result = await saveWordToVocab(translationText.trim());
+        if (result.success) {
+          if (result.isNewWord) {
+            saveBtn.textContent = 'Added!';
+            saveBtn.style.background = '#059669';
+          } else {
+            saveBtn.textContent = 'Updated!';
+            saveBtn.style.background = '#f59e0b';
+          }
+        } else {
+          saveBtn.textContent = 'Already exists';
+          saveBtn.style.background = '#6b7280';
+        }
+        setTimeout(() => {
+          saveBtn.textContent = 'Add to Vocab';
+          saveBtn.style.background = '#10b981';
+        }, 1500);
+      } catch (error) {
+        saveBtn.textContent = 'Error';
+        saveBtn.style.background = '#ef4444';
+        setTimeout(() => {
+          saveBtn.textContent = 'Add to Vocab';
+          saveBtn.style.background = '#10b981';
+        }, 1500);
+      }
+    });
+    
+    return saveBtn;
+  }
+
+  // ========== DRAG & INTERACTION HANDLERS ==========
 
   function attachDragListeners() {
     if (dragListenersAttached) return;
@@ -107,13 +201,13 @@
 
   function ensureContainer() {
     if (textContainer && document.body.contains(textContainer)) return textContainer;
-    textContainer = document.createElement('div');
-    textContainer.className = `${EXT_CLS_PREFIX}-container`;
-    textContainer.style.all = 'initial';
-    textContainer.style.position = 'fixed';
-    textContainer.style.inset = '0px';
-    textContainer.style.pointerEvents = 'none';
-    textContainer.style.zIndex = '2147483647';
+    textContainer = createElement('div', `${EXT_CLS_PREFIX}-container`, {
+      all: 'initial',
+      position: 'fixed',
+      inset: '0px',
+      pointerEvents: 'none',
+      zIndex: '2147483647'
+    });
     document.documentElement.appendChild(textContainer);
     return textContainer;
   }
@@ -155,15 +249,15 @@
   function ensureBackdrop() {
     const container = ensureContainer();
     if (backdropEl && container.contains(backdropEl)) return backdropEl;
-    backdropEl = document.createElement('div');
-    backdropEl.className = `${EXT_CLS_PREFIX}-backdrop`;
-    backdropEl.style.position = 'fixed';
-    backdropEl.style.inset = '0';
-    backdropEl.style.pointerEvents = 'none';
-    backdropEl.style.backdropFilter = 'none';
-    backdropEl.style.webkitBackdropFilter = 'none';
-    backdropEl.style.background = 'transparent';
-    backdropEl.style.zIndex = '2147483646';
+    backdropEl = createElement('div', `${EXT_CLS_PREFIX}-backdrop`, {
+      position: 'fixed',
+      inset: '0',
+      pointerEvents: 'none',
+      backdropFilter: 'none',
+      webkitBackdropFilter: 'none',
+      background: 'transparent',
+      zIndex: '2147483646'
+    });
     container.appendChild(backdropEl);
     return backdropEl;
   }
@@ -182,87 +276,70 @@
   function createTipPopover(position, text, isTranslating) {
     clearTip();
     const container = ensureContainer();
-    tipEl = document.createElement('div');
-    tipEl.className = `${EXT_CLS_PREFIX}-tip`;
-    tipEl.style.position = 'fixed';
-    tipEl.style.left = `${position.x}px`;
-    tipEl.style.top = `${position.y}px`;
-    tipEl.style.transform = position.transform;
-    tipEl.style.width = '280px';
-    tipEl.style.pointerEvents = 'auto';
-    tipEl.style.background = 'rgba(17,24,39,0.98)';
-    tipEl.style.color = '#e5e7eb';
-    tipEl.style.borderRadius = '8px';
-    tipEl.style.boxShadow = '0 12px 24px rgba(0,0,0,0.25)';
-    tipEl.style.padding = '6px';
-    tipEl.style.fontFamily = 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif';
-    tipEl.style.zIndex = '2147483647';
+    tipEl = createElement('div', `${EXT_CLS_PREFIX}-tip`, {
+      position: 'fixed',
+      left: `${position.x}px`,
+      top: `${position.y}px`,
+      transform: position.transform,
+      width: '280px',
+      pointerEvents: 'auto',
+      background: 'rgba(17,24,39,0.98)',
+      color: '#e5e7eb',
+      borderRadius: '8px',
+      boxShadow: '0 12px 24px rgba(0,0,0,0.25)',
+      padding: '6px',
+      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif',
+      zIndex: '2147483647'
+    });
 
     // Use global selectedWords state
     const selectedWord = selectedWords.join(' ') || '';
     
     if (selectedWord && !isTranslating) {
-      const wordHeader = document.createElement('div');
-      wordHeader.style.fontSize = '11px';
-      wordHeader.style.color = 'rgba(209,213,219,0.8)';
-      wordHeader.style.marginBottom = '3px';
-      wordHeader.style.fontWeight = '500';
+      const wordHeader = createElement('div', '', {
+        fontSize: '11px',
+        color: 'rgba(209,213,219,0.8)',
+        marginBottom: '3px',
+        fontWeight: '500'
+      });
       wordHeader.textContent = `"${selectedWord}"`;
       tipEl.appendChild(wordHeader);
     }
 
-    const body = document.createElement('div');
-    body.style.fontSize = '13px';
-    body.style.color = '#e5e7eb';
-    body.style.wordBreak = 'break-word';
-    body.style.marginBottom = '6px';
-
-    if (isTranslating) {
-      body.textContent = 'Translating…';
-    } else {
-      body.textContent = text || '';
-    }
-
+    const body = createElement('div', '', {
+      fontSize: '13px',
+      color: '#e5e7eb',
+      wordBreak: 'break-word',
+      marginBottom: '6px'
+    });
+    body.textContent = isTranslating ? 'Translating…' : (text || '');
     tipEl.appendChild(body);
 
     // Add save button if we have translation text and selected word
     if (!isTranslating && text && text.trim() && selectedWord) {
-      const saveBtn = document.createElement('button');
-      saveBtn.textContent = 'Add to Vocab';
-      saveBtn.style.width = '100%';
-      saveBtn.style.padding = '4px 6px';
-      saveBtn.style.background = '#2563eb';
-      saveBtn.style.border = 'none';
-      saveBtn.style.color = '#fff';
-      saveBtn.style.borderRadius = '4px';
-      saveBtn.style.fontSize = '11px';
-      saveBtn.style.cursor = 'pointer';
-      saveBtn.style.marginTop = '4px';
-      saveBtn.style.fontWeight = '500';
+      const saveBtn = createButton('Add to Vocab', 'primary');
+      applyStyles(saveBtn, {
+        width: '100%',
+        padding: '4px 6px',
+        fontSize: '11px',
+        marginTop: '4px',
+        fontWeight: '500'
+      });
       
       saveBtn.addEventListener('click', async () => {
         try {
           const result = await saveWordToVocab(text.trim());
           if (result.success) {
-            if (result.isNewWord) {
-              saveBtn.textContent = 'Added!';
-              saveBtn.style.background = '#10b981';
-            } else {
-              saveBtn.textContent = 'Updated!';
-              saveBtn.style.background = '#f59e0b';
-            }
-            setTimeout(() => {
-              saveBtn.textContent = 'Add to Vocab';
-              saveBtn.style.background = '#2563eb';
-            }, 1500);
+            saveBtn.textContent = result.isNewWord ? 'Added!' : 'Updated!';
+            saveBtn.style.background = result.isNewWord ? '#10b981' : '#f59e0b';
           } else {
             saveBtn.textContent = 'Already exists';
             saveBtn.style.background = '#6b7280';
-            setTimeout(() => {
-              saveBtn.textContent = 'Add to Vocab';
-              saveBtn.style.background = '#2563eb';
-            }, 1500);
           }
+          setTimeout(() => {
+            saveBtn.textContent = 'Add to Vocab';
+            saveBtn.style.background = '#2563eb';
+          }, 1500);
         } catch (error) {
           saveBtn.textContent = 'Error';
           saveBtn.style.background = '#ef4444';
@@ -279,56 +356,118 @@
     return { bodyEl: body };
   }
 
+  // ========== TRANSLATION DISPLAY ==========
+
+  function showLoadingIndicator(container, message, includeAnimation = true) {
+    if (!container) return;
+    container.innerHTML = '';
+    
+    if (includeAnimation) {
+      const wrapper = createElement('div', '', {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '6px 8px',
+        border: '1px dashed rgba(75,85,99,0.7)',
+        borderRadius: '10px',
+        background: 'rgba(31,41,55,0.6)'
+      });
+      
+      const dot = createElement('div', '', {
+        width: '10px',
+        height: '10px',
+        borderRadius: '9999px',
+        background: '#60a5fa',
+        opacity: '0.9'
+      });
+      
+      const text = createElement('div', '', {
+        fontSize: '16px',
+        color: '#e5e7eb'
+      });
+      text.textContent = message || 'Translating…';
+      
+      wrapper.appendChild(dot);
+      wrapper.appendChild(text);
+      container.appendChild(wrapper);
+    } else {
+      const wrap = createElement('div', '', {
+        fontSize: '16px',
+        color: '#e5e7eb'
+      });
+      wrap.textContent = message || 'Translating…';
+      container.appendChild(wrap);
+    }
+  }
+
+  function showTranslationResult(container, resultText) {
+    if (!container) return;
+    container.innerHTML = '';
+        
+    const card = createElement('div', '', {
+      border: '1px solid rgba(75,85,99,0.9)',
+      background: 'rgba(17,24,39,0.9)',
+      borderRadius: '12px',
+      padding: '12px 14px',
+      boxShadow: '0 8px 22px rgba(0,0,0,0.30)'
+    });
+
+    const text = createElement('div', '', {
+      fontSize: '18px',
+      lineHeight: '1.7',
+      color: '#f3f4f6',
+      whiteSpace: 'pre-wrap',
+      wordBreak: 'break-word'
+    });
+    text.textContent = resultText || 'Translation not available.';
+    card.appendChild(text);
+
+    if (resultText && resultText.trim() && selectedWords.length > 0) {
+      card.appendChild(createSaveToVocabButton(resultText));
+    }
+
+    container.appendChild(card);
+  }
+
   function setOverlayTranslationLoading(message) {
-    if (!translationBodyEl) return;
-    translationBodyEl.innerHTML = '';
-    const wrapper = document.createElement('div');
-    wrapper.style.display = 'flex';
-    wrapper.style.alignItems = 'center';
-    wrapper.style.gap = '10px';
-    wrapper.style.padding = '6px 8px';
-    wrapper.style.border = '1px dashed rgba(75,85,99,0.7)';
-    wrapper.style.borderRadius = '10px';
-    wrapper.style.background = 'rgba(31,41,55,0.6)';
-    const dot = document.createElement('div');
-    dot.style.width = '10px';
-    dot.style.height = '10px';
-    dot.style.borderRadius = '9999px';
-    dot.style.background = '#60a5fa';
-    dot.style.opacity = '0.9';
-    const text = document.createElement('div');
-    text.style.fontSize = '16px';
-    text.style.color = '#e5e7eb';
-    text.textContent = message || 'Translating…';
-    wrapper.appendChild(dot);
-    wrapper.appendChild(text);
-    translationBodyEl.appendChild(wrapper);
+    showLoadingIndicator(translationBodyEl, message, true);
+  }
+
+  function setPopupTranslationLoading(bodyEl, message) {
+    showLoadingIndicator(bodyEl, message, false);
+  }
+
+  function setPopupTranslationResult(bodyEl, resultText) {
+    showTranslationResult(bodyEl, resultText);
   }
 
   function renderQuestionClickableBlock(targetEl, text, beforeEl) {
     if (!targetEl) return;
     // Render a messenger-style left-aligned bubble for the question
-    const row = document.createElement('div');
-    row.className = `${EXT_CLS_PREFIX}-question-block`;
-    row.style.display = 'flex';
-    row.style.justifyContent = 'flex-start';
-    row.style.margin = '6px 0';
-    const bubble = document.createElement('div');
-    bubble.style.maxWidth = '85%';
-    bubble.style.background = 'rgba(31,41,55,0.9)';
-    bubble.style.border = '1px solid rgba(75,85,99,0.8)';
-    bubble.style.color = '#e5e7eb';
-    bubble.style.borderRadius = '14px';
-    bubble.style.padding = '10px 12px';
-    const header = document.createElement('div');
+    const row = createElement('div', `${EXT_CLS_PREFIX}-question-block`, {
+      display: 'flex',
+      justifyContent: 'flex-start',
+      margin: '6px 0'
+    });
+    const bubble = createElement('div', '', {
+      maxWidth: '85%',
+      background: 'rgba(31,41,55,0.9)',
+      border: '1px solid rgba(75,85,99,0.8)',
+      color: '#e5e7eb',
+      borderRadius: '14px',
+      padding: '10px 12px'
+    });
+    const header = createElement('div', '', {
+      color: 'rgba(209,213,219,0.9)',
+      fontSize: '12px',
+      marginBottom: '4px'
+    });
     header.textContent = 'Question';
-    header.style.color = 'rgba(209,213,219,0.9)';
-    header.style.fontSize = '12px';
-    header.style.marginBottom = '4px';
-    const words = document.createElement('div');
-    words.style.lineHeight = '1.8';
-    words.style.fontSize = '18px';
-    words.style.color = '#e5e7eb';
+    const words = createElement('div', '', {
+      lineHeight: '1.8',
+      fontSize: '18px',
+      color: '#e5e7eb'
+    });
     renderClickableWords(words, text || '');
     bubble.appendChild(header);
     bubble.appendChild(words);
@@ -344,27 +483,30 @@
 
   function renderResponseCard(targetEl, text, beforeEl) {
     // Messenger-style right-aligned bubble for user answer
-    const answerContainer = document.createElement('div');
-    answerContainer.className = `${EXT_CLS_PREFIX}-answer-container`;
-    answerContainer.style.margin = '6px 0';
-    
-    const row = document.createElement('div');
-    row.style.display = 'flex';
-    row.style.justifyContent = 'flex-end';
-    row.style.marginBottom = '4px';
-    
-    const bubble = document.createElement('div');
-    bubble.style.maxWidth = '85%';
-    bubble.style.background = '#2563eb';
-    bubble.style.border = 'none';
-    bubble.style.color = '#ffffff';
-    bubble.style.borderRadius = '14px';
-    bubble.style.padding = '10px 12px';
-    
-    const body = document.createElement('div');
-    body.style.fontSize = '16px';
-    body.style.lineHeight = '1.7';
-    body.style.whiteSpace = 'pre-wrap';
+    const answerContainer = createElement('div', `${EXT_CLS_PREFIX}-answer-container`, {
+      margin: '6px 0'
+    });
+
+    const row = createElement('div', '', {
+      display: 'flex',
+      justifyContent: 'flex-end',
+      marginBottom: '4px'
+    });
+
+    const bubble = createElement('div', '', {
+      maxWidth: '85%',
+      background: '#2563eb',
+      border: 'none',
+      color: '#ffffff',
+      borderRadius: '14px',
+      padding: '10px 12px'
+    });
+
+    const body = createElement('div', '', {
+      fontSize: '16px',
+      lineHeight: '1.7',
+      whiteSpace: 'pre-wrap'
+    });
     body.textContent = text || '';
     bubble.appendChild(body);
     row.appendChild(bubble);
@@ -430,37 +572,37 @@
   
   function addFloatingButtonToImage(img) {
     // Create floating button container
-    const buttonContainer = document.createElement('div');
-    buttonContainer.className = `${EXT_CLS_PREFIX}-image-button-container`;
-    buttonContainer.style.position = 'absolute';
-    buttonContainer.style.top = '8px';
-    buttonContainer.style.right = '8px';
-    buttonContainer.style.zIndex = '1000';
-    buttonContainer.style.opacity = '1';
-    buttonContainer.style.transition = 'opacity 0.3s ease';
-    buttonContainer.style.pointerEvents = 'auto';
-    buttonContainer.style.maxWidth = '200px';
-    buttonContainer.style.maxHeight = '40px';
+    const buttonContainer = createElement('div', `${EXT_CLS_PREFIX}-image-button-container`, {
+      position: 'absolute',
+      top: '8px',
+      right: '8px',
+      zIndex: '1000',
+      opacity: '1',
+      transition: 'opacity 0.3s ease',
+      pointerEvents: 'auto',
+      maxWidth: '200px',
+      maxHeight: '40px'
+    });
     
     // Create the floating button
-    const button = document.createElement('button');
-    button.className = `${EXT_CLS_PREFIX}-image-button`;
+    const button = createElement('button', `${EXT_CLS_PREFIX}-image-button`, {
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      backgroundSize: '200% 200%',
+      color: '#ffffff',
+      border: 'none',
+      borderRadius: '25px',
+      padding: '8px 16px',
+      fontSize: '12px',
+      fontWeight: '600',
+      cursor: 'pointer',
+      boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4), 0 2px 8px rgba(0,0,0,0.2)',
+      transition: 'all 0.3s ease',
+      backdropFilter: 'blur(8px)',
+      border: '1px solid rgba(255,255,255,0.2)',
+      textShadow: '0 1px 2px rgba(0,0,0,0.3)',
+      animation: 'weblang-gradient-pulse 3s ease-in-out infinite'
+    });
     button.textContent = '🤖 Discuss in LangLab';
-    button.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-    button.style.backgroundSize = '200% 200%';
-    button.style.color = '#ffffff';
-    button.style.border = 'none';
-    button.style.borderRadius = '25px';
-    button.style.padding = '8px 16px';
-    button.style.fontSize = '12px';
-    button.style.fontWeight = '600';
-    button.style.cursor = 'pointer';
-    button.style.boxShadow = '0 4px 15px rgba(102, 126, 234, 0.4), 0 2px 8px rgba(0,0,0,0.2)';
-    button.style.transition = 'all 0.3s ease';
-    button.style.backdropFilter = 'blur(8px)';
-    button.style.border = '1px solid rgba(255,255,255,0.2)';
-    button.style.textShadow = '0 1px 2px rgba(0,0,0,0.3)';
-    button.style.animation = 'weblang-gradient-pulse 3s ease-in-out infinite';
     
     // Add hover effects
     button.addEventListener('mouseenter', () => {
@@ -554,11 +696,12 @@
     });
     
     // Add image preview to popup
-    const imgPreview = document.createElement('div');
-    imgPreview.style.marginBottom = '12px';
-    imgPreview.style.textAlign = 'center';
-    imgPreview.style.borderRadius = '8px';
-    imgPreview.style.overflow = 'hidden';
+    const imgPreview = createElement('div', '', {
+      marginBottom: '12px',
+      textAlign: 'center',
+      borderRadius: '8px',
+      overflow: 'hidden'
+    });
     
     const imgClone = img.cloneNode(true);
     imgClone.style.maxWidth = '100%';
@@ -587,26 +730,29 @@
   async function generateImageQuestion(img, container) {
     try {
       // Show loading state with same styling as text popups
-      const wrapper = document.createElement('div');
-      wrapper.style.display = 'flex';
-      wrapper.style.alignItems = 'center';
-      wrapper.style.gap = '10px';
-      wrapper.style.padding = '6px 8px';
-      wrapper.style.border = '1px dashed rgba(75,85,99,0.7)';
-      wrapper.style.borderRadius = '10px';
-      wrapper.style.background = 'rgba(31,41,55,0.6)';
-      wrapper.style.marginBottom = '12px';
+      const wrapper = createElement('div', '', {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '6px 8px',
+        border: '1px dashed rgba(75,85,99,0.7)',
+        borderRadius: '10px',
+        background: 'rgba(31,41,55,0.6)',
+        marginBottom: '12px'
+      });
       
-      const dot = document.createElement('div');
-      dot.style.width = '10px';
-      dot.style.height = '10px';
-      dot.style.borderRadius = '9999px';
-      dot.style.background = '#60a5fa';
-      dot.style.opacity = '0.9';
+      const dot = createElement('div', '', {
+        width: '10px',
+        height: '10px',
+        borderRadius: '9999px',
+        background: '#60a5fa',
+        opacity: '0.9'
+      });
       
-      const text = document.createElement('div');
-      text.style.fontSize = '16px';
-      text.style.color = '#e5e7eb';
+      const text = createElement('div', '', {
+        fontSize: '16px',
+        color: '#e5e7eb'
+      });
       text.textContent = 'Generating question…';
       
       wrapper.appendChild(dot);
@@ -799,6 +945,18 @@
     } catch { return null; }
   }
 
+  async function translateQuestionToLearningLanguage(question) {
+    const learnLang = await getLearningLanguage();
+    const targetLang = learnLang || getDocumentLanguage() || 'en';
+    const translated = await translateTo(question, targetLang, 'en');
+    return translated || question || '';
+  }
+
+  async function generateAndTranslateQuestion(selectedText, existingQuestions = []) {
+    const q = await askQuestionWithPromptAPI(selectedText, existingQuestions);
+    return await translateQuestionToLearningLanguage(q);
+  }
+
   async function displayImageQuestion(question, container, img) {
     // Remove the loading wrapper
     const loadingWrapper = container.querySelector('div[style*="border: 1px dashed"]');
@@ -807,10 +965,8 @@
     }
     
     // Translate the question to the user's learning language
-    const learnLang = await getLearningLanguage();
-    const targetLang = learnLang || getDocumentLanguage() || 'en';
-    const translated = await translateTo(question, targetLang, 'en');
-    const finalQuestion = translated || question || '';
+    const finalQuestion = await translateQuestionToLearningLanguage(question);
+    const targetLang = (await getLearningLanguage()) || getDocumentLanguage() || 'en';
     
     // Use the same question display as text popups with proper styling
     const wordsEl = renderQuestionClickableBlock(container, finalQuestion);
@@ -823,36 +979,52 @@
     const lang = (detectedLang && detectedLang !== 'unknown') ? detectedLang : getDocumentLanguage() || 'en';
     
     // Create input container that will be positioned at the bottom
-    const inputContainer = document.createElement('div');
-    inputContainer.className = `${EXT_CLS_PREFIX}-input-container`;
-    inputContainer.style.position = 'sticky';
-    inputContainer.style.bottom = '0';
-    inputContainer.style.background = 'rgba(17,24,39,0.95)';
-    inputContainer.style.padding = '12px 0';
-    inputContainer.style.borderTop = '1px solid rgba(75,85,99,0.3)';
-    inputContainer.style.marginTop = '12px';
-    
-    const row = document.createElement('div');
-    row.style.display = 'flex';
-    row.style.alignItems = 'center';
-    row.style.gap = '8px';
+    const inputContainer = createElement('div', `${EXT_CLS_PREFIX}-input-container`, {
+      position: 'sticky',
+      bottom: '0',
+      background: 'rgba(17,24,39,0.95)',
+      padding: '12px 0',
+      borderTop: '1px solid rgba(75,85,99,0.3)',
+      marginTop: '12px'
+    });
 
-    const input = document.createElement('input');
+    const row = createElement('div', '', {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px'
+    });
+
+    const input = createElement('input', '', {
+      flex: '1',
+      padding: '10px 12px',
+      borderRadius: '8px',
+      border: '1px solid rgba(75,85,99,0.8)',
+      background: 'rgba(31,41,55,0.7)',
+      color: '#e5e7eb',
+      fontSize: '14px'
+    });
     input.type = 'text';
     input.placeholder = 'Type your answer…';
-    input.style.flex = '1';
-    input.style.padding = '10px 12px';
-    input.style.borderRadius = '8px';
-    input.style.border = '1px solid rgba(75,85,99,0.8)';
-    input.style.background = 'rgba(31,41,55,0.7)';
-    input.style.color = '#e5e7eb';
-    input.style.fontSize = '14px';
 
-    const right = document.createElement('div');
-    right.style.display = 'flex';
-    right.style.gap = '8px';
+    const right = createElement('div', '', {
+      display: 'flex',
+      gap: '8px'
+    });
 
-    const micBtn = document.createElement('button');
+    const micBtn = createElement('button', '', {
+      padding: '10px',
+      borderRadius: '50%',
+      border: 'none',
+      background: 'rgba(37,99,235,0.1)',
+      color: '#2563eb',
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      transition: 'all 0.2s ease',
+      minWidth: '40px',
+      minHeight: '40px'
+    });
     micBtn.title = 'Speak your answer';
     micBtn.innerHTML = `
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -862,18 +1034,6 @@
         <path d="M7 22H17V24H7V22Z" fill="currentColor"/>
       </svg>
     `;
-    micBtn.style.padding = '10px';
-    micBtn.style.borderRadius = '50%';
-    micBtn.style.border = 'none';
-    micBtn.style.background = 'rgba(37,99,235,0.1)';
-    micBtn.style.color = '#2563eb';
-    micBtn.style.cursor = 'pointer';
-    micBtn.style.display = 'flex';
-    micBtn.style.alignItems = 'center';
-    micBtn.style.justifyContent = 'center';
-    micBtn.style.transition = 'all 0.2s ease';
-    micBtn.style.minWidth = '40px';
-    micBtn.style.minHeight = '40px';
     
     // Add hover effects
     micBtn.addEventListener('mouseenter', () => {
@@ -890,15 +1050,16 @@
       }
     });
 
-    const sendBtn = document.createElement('button');
+    const sendBtn = createElement('button', '', {
+      padding: '8px 12px',
+      borderRadius: '8px',
+      border: 'none',
+      background: '#2563eb',
+      color: '#fff',
+      cursor: 'pointer'
+    });
     sendBtn.title = 'Send';
     sendBtn.textContent = 'Send';
-    sendBtn.style.padding = '8px 12px';
-    sendBtn.style.borderRadius = '8px';
-    sendBtn.style.border = 'none';
-    sendBtn.style.background = '#2563eb';
-    sendBtn.style.color = '#fff';
-    sendBtn.style.cursor = 'pointer';
 
     right.appendChild(micBtn);
     right.appendChild(sendBtn);
@@ -979,27 +1140,28 @@
     
     function displayRecordedAudio(audioBlob) {
       // Create audio message container
-      const audioContainer = document.createElement('div');
-      audioContainer.className = `${EXT_CLS_PREFIX}-audio-message`;
-      audioContainer.style.margin = '8px 0';
-      audioContainer.style.padding = '12px';
-      audioContainer.style.background = 'rgba(31,41,55,0.7)';
-      audioContainer.style.borderRadius = '12px';
-      audioContainer.style.border = '1px solid rgba(75,85,99,0.3)';
+      const audioContainer = createElement('div', `${EXT_CLS_PREFIX}-audio-message`, {
+        margin: '8px 0',
+        padding: '12px',
+        background: 'rgba(31,41,55,0.7)',
+        borderRadius: '12px',
+        border: '1px solid rgba(75,85,99,0.3)'
+      });
       
       // Create audio element
-      const audio = document.createElement('audio');
+      const audio = createElement('audio', '', {
+        width: '100%',
+        marginBottom: '8px'
+      });
       audio.controls = true;
       audio.src = URL.createObjectURL(audioBlob);
-      audio.style.width = '100%';
-      audio.style.marginBottom = '8px';
       
       // Create processing indicator
-      const processingDiv = document.createElement('div');
-      processingDiv.className = `${EXT_CLS_PREFIX}-processing`;
-      processingDiv.style.color = '#9ca3af';
-      processingDiv.style.fontSize = '14px';
-      processingDiv.style.fontStyle = 'italic';
+      const processingDiv = createElement('div', `${EXT_CLS_PREFIX}-processing`, {
+        color: '#9ca3af',
+        fontSize: '14px',
+        fontStyle: 'italic'
+      });
       processingDiv.textContent = 'Processing audio...';
       
       // Add elements to container
@@ -1042,14 +1204,14 @@
                   }
                   
                   // Add teacher's explanation
-                  const explanationDiv = document.createElement('div');
-                  explanationDiv.className = `${EXT_CLS_PREFIX}-teacher-explanation`;
-                  explanationDiv.style.marginTop = '8px';
-                  explanationDiv.style.padding = '8px';
-                  explanationDiv.style.background = 'rgba(37,99,235,0.1)';
-                  explanationDiv.style.borderRadius = '6px';
-                  explanationDiv.style.fontSize = '14px';
-                  explanationDiv.style.color = '#e5e7eb';
+                  const explanationDiv = createElement('div', `${EXT_CLS_PREFIX}-teacher-explanation`, {
+                    marginTop: '8px',
+                    padding: '8px',
+                    background: 'rgba(37,99,235,0.1)',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    color: '#e5e7eb'
+                  });
                   explanationDiv.innerHTML = `<strong>AI Teacher:</strong> ${explanation}`;
                   latestContainer.appendChild(explanationDiv);
                 }
@@ -1153,12 +1315,13 @@
             const result = (e.detail && e.detail.ok && e.detail.result) ? e.detail.result : (e.detail && e.detail.error ? e.detail.error : 'No evaluation.');
             
             // Add evaluation directly below the answer
-            const evaluation = document.createElement('div');
-            evaluation.style.fontSize = '12px';
-            evaluation.style.color = 'rgba(229,231,235,0.85)';
-            evaluation.style.margin = '4px 0 0 0';
-            evaluation.style.textAlign = 'right';
-            evaluation.style.fontStyle = 'italic';
+            const evaluation = createElement('div', '', {
+              fontSize: '12px',
+              color: 'rgba(229,231,235,0.85)',
+              margin: '4px 0 0 0',
+              textAlign: 'right',
+              fontStyle: 'italic'
+            });
             evaluation.textContent = result;
             answerContainer.appendChild(evaluation);
             
@@ -1191,89 +1354,6 @@
     }
     sendBtn.addEventListener('click', handleSend);
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSend(); });
-  }
-
-  function setPopupTranslationLoading(bodyEl, message) {
-    if (!bodyEl) return;
-    bodyEl.innerHTML = '';
-    const wrap = document.createElement('div');
-    wrap.style.fontSize = '16px';
-    wrap.style.color = '#e5e7eb';
-    wrap.textContent = message || 'Translating…';
-    bodyEl.appendChild(wrap);
-  }
-
-  function setPopupTranslationResult(bodyEl, resultText) {
-    if (!bodyEl) return;
-    bodyEl.innerHTML = '';
-    const box = document.createElement('div');
-    box.style.border = '1px solid rgba(75,85,99,0.9)';
-    box.style.background = 'rgba(17,24,39,0.9)';
-    box.style.borderRadius = '10px';
-    box.style.padding = '10px 12px';
-    const text = document.createElement('div');
-    text.style.fontSize = '17px';
-    text.style.lineHeight = '1.7';
-    text.style.color = '#f3f4f6';
-    text.style.whiteSpace = 'pre-wrap';
-    text.style.wordBreak = 'break-word';
-    text.textContent = resultText || 'Translation not available.';
-    box.appendChild(text);
-
-    // Add save to vocab button if we have translation text and selected word
-    console.log(resultText, selectedWords);
-    if (resultText && resultText.trim() && selectedWords.length > 0) {
-      const selectedWord = selectedWords.join(' ');
-      const saveBtn = document.createElement('button');
-      saveBtn.textContent = 'Add to Vocab';
-      saveBtn.style.width = '100%';
-      saveBtn.style.padding = '8px 12px';
-      saveBtn.style.background = '#10b981';
-      saveBtn.style.border = 'none';
-      saveBtn.style.color = '#fff';
-      saveBtn.style.borderRadius = '8px';
-      saveBtn.style.fontSize = '13px';
-      saveBtn.style.cursor = 'pointer';
-      saveBtn.style.marginTop = '12px';
-      saveBtn.style.fontWeight = '500';
-      
-      saveBtn.addEventListener('click', async () => {
-        try {
-          const result = await saveWordToVocab(resultText.trim());
-          if (result.success) {
-            if (result.isNewWord) {
-              saveBtn.textContent = 'Added!';
-              saveBtn.style.background = '#059669';
-            } else {
-              saveBtn.textContent = 'Updated!';
-              saveBtn.style.background = '#f59e0b';
-            }
-            setTimeout(() => {
-              saveBtn.textContent = 'Add to Vocab';
-              saveBtn.style.background = '#10b981';
-            }, 1500);
-          } else {
-            saveBtn.textContent = 'Already exists';
-            saveBtn.style.background = '#6b7280';
-            setTimeout(() => {
-              saveBtn.textContent = 'Add to Vocab';
-              saveBtn.style.background = '#10b981';
-            }, 1500);
-          }
-        } catch (error) {
-          saveBtn.textContent = 'Error';
-          saveBtn.style.background = '#ef4444';
-          setTimeout(() => {
-            saveBtn.textContent = 'Add to Vocab';
-            saveBtn.style.background = '#10b981';
-          }, 1500);
-        }
-      });
-      
-      box.appendChild(saveBtn);
-    }
-
-    bodyEl.appendChild(box);
   }
 
   // removed local getLanguageDetector; detection runs in service worker
@@ -1400,17 +1480,15 @@
   }
 
   function buildControlsBar(context, selectedText) {
-    const bar = document.createElement('div');
-    bar.classList.add(`${EXT_CLS_PREFIX}-controls`);
-    bar.style.display = 'grid';
-    bar.style.gridTemplateColumns = context === 'sidebar' ? 'auto 1fr auto' : 'auto 1fr auto';
-    bar.style.alignItems = 'center';
-    bar.style.gap = '10px';
-    bar.style.marginTop = '10px';
+    const bar = createElement('div', `${EXT_CLS_PREFIX}-controls`, {
+      display: 'grid',
+      gridTemplateColumns: context === 'sidebar' ? 'auto 1fr auto' : 'auto 1fr auto',
+      alignItems: 'center',
+      gap: '10px',
+      marginTop: '10px'
+    });
 
-    const langBtn = document.createElement('button');
-    langBntStyles(langBtn);
-    langBtn.textContent = 'Detecting…';
+    const langBtn = createButton('Detecting…', 'lang');
     
     // Store the promise so we can wait for it later
     let languageDetectionPromise;
@@ -1446,15 +1524,14 @@
     // Store the promise globally so save functions can wait for it
     window.currentLanguageDetectionPromise = languageDetectionPromise;
 
-    const centerWrap = document.createElement('div');
-    centerWrap.style.display = 'flex';
-    centerWrap.style.justifyContent = 'center';
-    centerWrap.style.gap = '8px';
+    const centerWrap = createElement('div', '', {
+      display: 'flex',
+      justifyContent: 'center',
+      gap: '8px'
+    });
 
-    const btnAsk = document.createElement('button');
+    const btnAsk = createButton('Ask me a question', 'primary');
     btnAsk.classList.add(`${EXT_CLS_PREFIX}-btn-ask`);
-    primaryBtnStyles(btnAsk);
-    btnAsk.textContent = 'Ask me a question';
     btnAsk.addEventListener('click', async () => {
       try {
         setActionButtonsDisabled(true); btnAsk.textContent = 'Asking…';
@@ -1482,19 +1559,15 @@
               }
             });
             
-            const q = await askQuestionWithPromptAPI(selectedText, existingQuestions);
+            const finalQ = await generateAndTranslateQuestion(selectedText, existingQuestions);
             if (popupBodyRef) {
-              const learnLang = await getLearningLanguage();
-              const target = learnLang || getDocumentLanguage();
-              const translated = await translateTo(q, target, 'en');
-              const finalQ = translated || q || '';
               // Insert question before the input container if it exists
               const inputContainer = popupBodyRef.querySelector(`.${EXT_CLS_PREFIX}-input-container`);
               const wordsEl = renderQuestionClickableBlock(popupBodyRef, finalQ, inputContainer);
               popupWordsContainerEl = wordsEl;
               // Only attach response controls if this is the first question
               if (!hasExistingContent) {
-                attachResponseControls(popupBodyRef, target);
+                attachResponseControls(popupBodyRef, currentDetectedLanguage);
               }
               // Update input visibility after adding question
               updateInputVisibility(popupBodyRef);
@@ -1517,11 +1590,7 @@
             }
           });
           
-          const q = await askQuestionWithPromptAPI(selectedText, existingQuestions);
-          const learnLang = await getLearningLanguage();
-          const target = learnLang || getDocumentLanguage();
-          const translated = await translateTo(q, target, 'en');
-          const finalQ = translated || q || '';
+          const finalQ = await generateAndTranslateQuestion(selectedText, existingQuestions);
           // Append new question instead of replacing
           if (hasExistingContent) {
             // Insert question before the input container
@@ -1530,7 +1599,7 @@
           } else {
             translationBodyEl.innerHTML = '';
             renderQuestionClickableBlock(translationBodyEl, finalQ);
-            attachResponseControls(translationBodyEl, target);
+            attachResponseControls(translationBodyEl, currentDetectedLanguage);
           }
           // Update input visibility after adding question
           updateInputVisibility(translationBodyEl);
@@ -1539,9 +1608,9 @@
         const msg = (e && e.message) ? e.message : 'Unable to generate a question.';
         if (context === 'popup') {
           if (popupBodyRef) setPopupTranslationResult(popupBodyRef, msg);
-        } else if (context === 'image-popup') {
-          if (popupBodyRef) setPopupTranslationResult(popupBodyRef, msg);
-        }
+        } 
+
+        throw e;
       } finally {
         setActionButtonsDisabled(false); btnAsk.textContent = 'Ask me a question';
       }
@@ -1550,10 +1619,8 @@
     centerWrap.appendChild(btnAsk);
 
     // Add View Vocabulary button to the right side
-    const btnVocab = document.createElement('button');
+    const btnVocab = createButton('📚 Vocab', 'secondary');
     btnVocab.classList.add(`${EXT_CLS_PREFIX}-btn-vocab`);
-    secondaryBtnStyles(btnVocab);
-    btnVocab.textContent = '📚 Vocab';
     btnVocab.addEventListener('click', async () => {
       try {
         // Open the sidebar
@@ -1612,64 +1679,36 @@
     } catch {}
   }
 
-  function langBntStyles(btn){
-    btn.style.padding = '6px 10px';
-    btn.style.background = 'rgba(31,41,55,0.6)';
-    btn.style.border = '1px solid rgba(75,85,99,0.7)';
-    btn.style.color = '#e5e7eb';
-    btn.style.fontSize = '12px';
-    btn.style.borderRadius = '8px';
-    btn.style.cursor = 'default';
-  }
-
-  function primaryBtnStyles(btn){
-    btn.style.padding = '8px 12px';
-    btn.style.background = '#2563eb';
-    btn.style.border = 'none';
-    btn.style.color = '#fff';
-    btn.style.fontSize = '13px';
-    btn.style.borderRadius = '8px';
-    btn.style.cursor = 'pointer';
-  }
-
-  function secondaryBtnStyles(btn){
-    btn.style.padding = '8px 12px';
-    btn.style.background = 'rgba(31,41,55,0.7)';
-    btn.style.border = '1px solid rgba(75,85,99,0.8)';
-    btn.style.color = '#e5e7eb';
-    btn.style.fontSize = '13px';
-    btn.style.borderRadius = '8px';
-    btn.style.cursor = 'pointer';
-  }
 
   function createImagePopup(position) {
     clearPopup();
     const container = ensureContainer();
     ensureBackdrop();
-    popupEl = document.createElement('div');
-    popupEl.className = `${EXT_CLS_PREFIX}-popup`;
-    popupEl.style.position = 'fixed';
-    popupEl.style.left = `${position.x}px`;
-    popupEl.style.top = `${position.y}px`;
-    popupEl.style.transform = position.transform;
-    popupEl.style.width = '380px';
-    popupEl.style.pointerEvents = 'auto';
-    popupEl.style.background = 'rgba(17,24,39,0.96)';
-    popupEl.style.border = '1px solid rgba(75,85,99,0.9)';
-    popupEl.style.color = '#e5e7eb';
-    popupEl.style.borderRadius = '12px';
-    popupEl.style.boxShadow = '0 16px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.04) inset';
-    popupEl.style.padding = '14px';
-    popupEl.style.fontFamily = 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif';
-    popupEl.style.backdropFilter = 'none';
-    popupEl.style.webkitBackdropFilter = 'none';
+    popupEl = createElement('div', `${EXT_CLS_PREFIX}-popup`, {
+      position: 'fixed',
+      left: `${position.x}px`,
+      top: `${position.y}px`,
+      transform: position.transform,
+      width: '380px',
+      pointerEvents: 'auto',
+      background: 'rgba(17,24,39,0.96)',
+      border: '1px solid rgba(75,85,99,0.9)',
+      color: '#e5e7eb',
+      borderRadius: '12px',
+      boxShadow: '0 16px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.04) inset',
+      padding: '14px',
+      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif',
+      backdropFilter: 'none',
+      webkitBackdropFilter: 'none'
+    });
 
-    const body = document.createElement('div');
-    body.style.fontSize = '18px';
-    body.style.color = '#e5e7eb';
-    body.style.marginBottom = '8px';
-    body.style.wordBreak = 'break-word';
-    
+    const body = createElement('div', '', {
+      fontSize: '18px',
+      color: '#e5e7eb',
+      marginBottom: '8px',
+      wordBreak: 'break-word'
+    });
+
     // No translation UI for image popups
     popupEl.appendChild(body);
     container.appendChild(popupEl);
@@ -1682,23 +1721,23 @@
     const container = ensureContainer();
     ensureBackdrop();
 
-    popupEl = document.createElement('div');
-    popupEl.className = `${EXT_CLS_PREFIX}-overlay`;
-    popupEl.style.position = 'fixed';
-    popupEl.style.left = `${rect.left}px`;
-    popupEl.style.top = `${rect.top}px`;
-    popupEl.style.width = `${rect.width}px`;
-    popupEl.style.overflow = 'visible';
-    popupEl.style.pointerEvents = 'auto';
-    popupEl.style.background = 'rgba(17,24,39,0.92)';
-    popupEl.style.backdropFilter = 'blur(2px)';
-    popupEl.style.border = '1px solid rgba(55,65,81,0.9)';
-    popupEl.style.color = '#e5e7eb';
-    popupEl.style.borderRadius = '12px';
-    popupEl.style.boxShadow = '0 16px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.04) inset';
-    popupEl.style.padding = '0';
-    popupEl.style.fontFamily = 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif';
-    popupEl.style.zIndex = '2147483647';
+    popupEl = createElement('div', `${EXT_CLS_PREFIX}-overlay`, {
+      position: 'fixed',
+      left: `${rect.left}px`,
+      top: `${rect.top}px`,
+      width: `${rect.width}px`,
+      overflow: 'visible',
+      pointerEvents: 'auto',
+      background: 'rgba(17,24,39,0.92)',
+      backdropFilter: 'blur(2px)',
+      border: '1px solid rgba(55,65,81,0.9)',
+      color: '#e5e7eb',
+      borderRadius: '12px',
+      boxShadow: '0 16px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.04) inset',
+      padding: '0',
+      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif',
+      zIndex: '2147483647'
+    });
 
     // Card-level drag: mousedown on non-interactive space starts drag
     attachDragListeners();
@@ -1716,22 +1755,23 @@
     });
 
     // Content wrapper
-    popupContentEl = document.createElement('div');
-    popupContentEl.style.padding = '14px';
+    popupContentEl = createElement('div', '', { padding: '14px' });
 
-    const wordsContainer = document.createElement('div');
-    wordsContainer.style.lineHeight = '1.8';
-    wordsContainer.style.fontSize = '19px';
-    wordsContainer.style.color = '#e5e7eb';
-    wordsContainer.style.marginBottom = '8px';
+    const wordsContainer = createElement('div', '', {
+      lineHeight: '1.8',
+      fontSize: '19px',
+      color: '#e5e7eb',
+      marginBottom: '8px'
+    });
 
     renderClickableWords(wordsContainer, text);
     overlayWordsContainerEl = wordsContainer;
 
-    translationBodyEl = document.createElement('div');
-    translationBodyEl.style.fontSize = '18px';
-    translationBodyEl.style.color = '#e5e7eb';
-    translationBodyEl.style.marginTop = '8px';
+    translationBodyEl = createElement('div', '', {
+      fontSize: '18px',
+      color: '#e5e7eb',
+      marginTop: '8px'
+    });
 
     popupContentEl.appendChild(wordsContainer);
     popupContentEl.appendChild(translationBodyEl);
@@ -1762,7 +1802,7 @@
   function addClickableStyles() {
     const styleId = `${EXT_CLS_PREFIX}-clickable-styles`;
     if (document.getElementById(styleId)) return;
-    const style = document.createElement('style');
+    const style = createElement('style');
     style.id = styleId;
     style.textContent = `
 .${EXT_CLS_PREFIX}-clickable { cursor: pointer; position: relative; transition: background-color 0.15s ease, box-shadow 0.15s ease; border-radius: 4px; }
@@ -1776,16 +1816,16 @@
     if (popupEl) return; // Don't show hover decoration when overlay is open
     detachHoverOverlay();
     try {
-      hoverOverlayEl = document.createElement('div');
-      hoverOverlayEl.className = `${EXT_CLS_PREFIX}-hover-overlay`;
-      hoverOverlayEl.style.position = 'absolute';
-      hoverOverlayEl.style.inset = '0';
-      hoverOverlayEl.style.pointerEvents = 'none';
-      hoverOverlayEl.style.background = 'linear-gradient(to bottom, rgba(59,130,246,0.10), rgba(59,130,246,0.14))';
-      hoverOverlayEl.style.borderRadius = getComputedStyle(paragraphEl).borderRadius || '4px';
-      hoverOverlayEl.style.boxShadow = 'inset 0 0 0 1px rgba(75,85,99,0.65), 0 8px 20px rgba(0,0,0,0.18)';
-      hoverOverlayEl.style.transition = 'opacity 120ms ease';
-      hoverOverlayEl.style.opacity = '1';
+      hoverOverlayEl = createElement('div', `${EXT_CLS_PREFIX}-hover-overlay`, {
+        position: 'absolute',
+        inset: '0',
+        pointerEvents: 'none',
+        background: 'linear-gradient(to bottom, rgba(59,130,246,0.10), rgba(59,130,246,0.14))',
+        borderRadius: getComputedStyle(paragraphEl).borderRadius || '4px',
+        boxShadow: 'inset 0 0 0 1px rgba(75,85,99,0.65), 0 8px 20px rgba(0,0,0,0.18)',
+        transition: 'opacity 120ms ease',
+        opacity: '1'
+      });
       paragraphEl.appendChild(hoverOverlayEl);
     } catch {}
   }
@@ -1961,14 +2001,14 @@
         container.appendChild(document.createTextNode(part));
       } else {
         const cleanWord = part.replace(/[^\p{L}\p{N}\s'-]/gu, '').trim();
-        const span = document.createElement('span');
-        span.className = `${EXT_CLS_PREFIX}-word`;
+        const span = createElement('span', `${EXT_CLS_PREFIX}-word`, {
+          cursor: 'pointer',
+          transition: 'color 150ms ease-in-out, background 150ms ease-in-out',
+          borderBottom: '1px dashed rgba(156,163,175,0.6)',
+          display: 'inline-block',
+          padding: '0 2px'
+        });
         span.textContent = part;
-        span.style.cursor = 'pointer';
-        span.style.transition = 'color 150ms ease-in-out, background 150ms ease-in-out';
-        span.style.borderBottom = '1px dashed rgba(156,163,175,0.6)';
-        span.style.display = 'inline-block';
-        span.style.padding = '0 2px';
 
         const currentIndex = wordOrder.length;
         if (cleanWord) {
@@ -2106,6 +2146,10 @@
       window.dispatchEvent(new CustomEvent('weblang-image-fetch-result', { 
         detail: { id, ok, result, error } 
       }));
+    }
+
+    if (message.type === 'TRANSLATION_PROGRESS' && progressCallbacks.has(message.requestId)) {
+      progressCallbacks.get(message.requestId)(message.message);
     }
   });
 

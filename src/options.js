@@ -7,6 +7,13 @@
   const resetBtn = document.getElementById('resetBtn');
   const statusEl = document.getElementById('status');
 
+  function createElement(tag, className, styles = {}) {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    Object.assign(el.style, styles);
+    return el;
+  }
+
   function showStatus(msg) {
     statusEl.textContent = msg || '';
     if (!msg) return;
@@ -22,7 +29,7 @@
       // Reset to all languages
       learnLangEl.innerHTML = '<option value="">Select language to learn</option>';
       languages.forEach(lang => {
-        const option = document.createElement('option');
+        const option = createElement('option');
         option.value = lang.code;
         option.textContent = `${lang.flag} ${lang.name}`;
         learnLangEl.appendChild(option);
@@ -58,7 +65,7 @@
 
       // Add available languages first
       availableLanguages.forEach(lang => {
-        const option = document.createElement('option');
+        const option = createElement('option');
         option.value = lang.code;
         option.textContent = `${lang.flag} ${lang.name}`;
         learnLangEl.appendChild(option);
@@ -66,16 +73,15 @@
 
       // Add unavailable languages with indication
       if (unavailableLanguages.length > 0) {
-        const separator = document.createElement('option');
+        const separator = createElement('option');
         separator.disabled = true;
         separator.textContent = '─── Limited support ───';
         learnLangEl.appendChild(separator);
 
         unavailableLanguages.forEach(lang => {
-          const option = document.createElement('option');
+          const option = createElement('option', '', { color: '#9ca3af' });
           option.value = lang.code;
           option.textContent = `${lang.flag} ${lang.name} (limited)`;
-          option.style.color = '#9ca3af';
           learnLangEl.appendChild(option);
         });
       }
@@ -91,7 +97,7 @@
       learnLangEl.innerHTML = '<option value="">Select language to learn</option>';
       languages.forEach(lang => {
         if (lang.code !== selectedNativeLang) {
-          const option = document.createElement('option');
+          const option = createElement('option');
           option.value = lang.code;
           option.textContent = `${lang.flag} ${lang.name}`;
           learnLangEl.appendChild(option);
