@@ -197,8 +197,6 @@
     }
   }
 
-  // removed local getTranslator; translation runs in service worker
-
   function ensureContainer() {
     if (textContainer && document.body.contains(textContainer)) return textContainer;
     textContainer = createElement('div', `${EXT_CLS_PREFIX}-container`, {
@@ -1416,11 +1414,6 @@
             resolve(e.detail.result || '');
           } else {
             const errMsg = e.detail.error || 'Unknown Prompt API error';
-            // Graceful fallback when Prompt API is not available
-            if (/Prompt API not supported|unavailable/i.test(errMsg)) {
-              resolve(buildHeuristicQuestion(selectedText, existingQuestions));
-              return;
-            }
             reject(new Error(errMsg));
           }
         } catch (err) {
@@ -1438,45 +1431,9 @@
         });
       } catch (err) {
         window.removeEventListener('weblang-prompt-result', onResult, true);
-        // If messaging fails, fallback to heuristic
-        resolve(buildHeuristicQuestion(selectedText, existingQuestions));
+        reject(err);
       }
     });
-  }
-
-  function buildHeuristicQuestion(text, existingQuestions = []) {
-    const t = String(text || '').trim();
-    if (!t) return 'What is the main idea of this text?';
-    
-    // If we have many existing questions, suggest selecting another text block
-    if (existingQuestions.length >= 3) {
-      return 'Great questions! You\'ve explored this text thoroughly. Try selecting another paragraph or text block to continue learning!';
-    }
-    
-    // Pick a keyword: longest word over 6 chars, else first word
-    const words = t.replace(/[^\p{L}\p{N}\s'-]/gu, ' ').split(/\s+/).filter(Boolean);
-    let keyword = words.find(w => w.length >= 8) || words.find(w => w.length >= 6) || words[0] || '';
-    // Prefer a capitalized content word if available
-    const cap = words.find(w => /^\p{Lu}\p{Ll}+$/u.test(w));
-    if (cap) keyword = cap;
-    
-    // Choose a question template based on text length and existing questions
-    const questionTemplates = [
-      'What is the main argument of this paragraph?',
-      'What does this text suggest about the author\'s perspective?',
-      'How does this paragraph connect to the overall topic?',
-      'What evidence does the author provide?',
-      'What is the tone of this passage?',
-      'What can you infer from this text?'
-    ];
-    
-    if (existingQuestions.length >= 2) {
-      return questionTemplates[existingQuestions.length % questionTemplates.length];
-    }
-    
-    if (t.length > 240) return 'What is the main argument of this paragraph?';
-    if (keyword && keyword.length >= 6) return `What does "${keyword}" mean in this context?`;
-    return 'What is the key point of this sentence?';
   }
 
   function buildControlsBar(context, selectedText) {
