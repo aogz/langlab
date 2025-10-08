@@ -50,6 +50,15 @@
     }
   }
 
+  function scrollToBottom(element) {
+    if (element) {
+      // Use requestAnimationFrame to ensure scrolling happens after the DOM update
+      requestAnimationFrame(() => {
+        element.scrollTop = element.scrollHeight;
+      });
+    }
+  }
+
   const BUTTON_STYLES = {
     primary: {
       padding: '8px 12px',
@@ -615,76 +624,79 @@
   }
   
   async function openOverlayForImage(img) {
-    if (!img) {
-      console.error('Image is undefined in openOverlayForImage');
-      return;
-    }
-    
-    // Get image position for popup placement
-    const rect = img.getBoundingClientRect();
-    if (!rect) {
-      console.error('Failed to get bounding rect for image');
-      return;
-    }
-    
-    const position = calculatePosition(rect);
-    if (!position) {
-      console.error('Failed to calculate position for image');
-      return;
-    }
-    
-    // Create dedicated image popup (no translation UI)
-    const popup = createImagePopup(position);
-    const body = popup.bodyEl;
-    
-    // Add drag functionality to the popup
-    attachDragListeners();
-    popupEl.addEventListener('mousedown', (e) => {
-      if (isInteractiveTarget(e.target)) return;
-      try {
-        isDraggingPopup = true;
-        const r = popupEl.getBoundingClientRect();
-        popupEl.style.transform = 'none';
-        dragOffsetX = e.clientX - r.left;
-        dragOffsetY = e.clientY - r.top;
-        e.preventDefault();
-        e.stopPropagation();
-      } catch {}
-    });
-    
-    // Add image preview to popup
-    const imgPreview = createElement('div', '', {
-      marginBottom: '12px',
-      textAlign: 'center',
-      borderRadius: '8px',
-      overflow: 'hidden'
-    });
-    
-    const imgClone = img.cloneNode(true);
-    imgClone.style.maxWidth = '100%';
-    imgClone.style.maxHeight = '200px';
-    imgClone.style.borderRadius = '8px';
-    imgClone.style.cursor = 'default';
-    imgClone.style.opacity = '1';
-    imgClone.style.objectFit = 'contain';
-    imgPreview.appendChild(imgClone);
-    
-    body.appendChild(imgPreview);
-    
-    const questionContainer = createElement('div', `${EXT_CLS_PREFIX}-image-question-container`);
-    body.appendChild(questionContainer);
+    if (!img) return;
 
-    // Set popupBodyRef for image popups (needed by buildControlsBar to target the right container)
-    popupBodyRef = questionContainer;
-    
-    // Add the body to the popup first
-    popupEl.appendChild(body);
-    
-    // Create controls bar using the same structure as text popups
-    const controls = buildControlsBar('image-popup', '');
-    
-    // Add the controls to the popup (below the body)
-    popupEl.appendChild(controls);
+    const centeredPosition = {
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+      transform: 'translate(-50%, -50%)'
+    };
+
+    // A shared function to create and position the popup once the image is ready
+    const createAndPositionPopup = (loadedImg) => {
+      const rect = loadedImg.getBoundingClientRect();
+      if (!rect || rect.width === 0 || rect.height === 0) {
+        console.warn('Image has no dimensions, cannot open overlay.');
+        if (popupEl) popupEl.style.display = 'none';
+        return;
+      }
+      
+      const popup = createImagePopup(centeredPosition);
+      
+      // Clear any loading state
+      popup.bodyEl.innerHTML = '';
+      
+      const imgPreview = createElement('div', '', {
+        marginBottom: '12px',
+        textAlign: 'center',
+        borderRadius: '8px',
+        overflow: 'hidden'
+      });
+      
+      const imgClone = loadedImg.cloneNode(true);
+      imgClone.style.maxWidth = '100%';
+      imgClone.style.maxHeight = '200px';
+      imgClone.style.borderRadius = '8px';
+      imgClone.style.cursor = 'default';
+      imgClone.style.opacity = '1';
+      imgClone.style.objectFit = 'contain';
+      imgPreview.appendChild(imgClone);
+      
+      popup.bodyEl.appendChild(imgPreview);
+      
+      const questionContainer = createElement('div', `${EXT_CLS_PREFIX}-image-question-container`);
+      popup.bodyEl.appendChild(questionContainer);
+      popupBodyRef = questionContainer;
+      
+      const controls = buildControlsBar('image-popup', '');
+      popupEl.appendChild(popup.bodyEl); // Add body before controls
+      popupEl.appendChild(controls);
+
+      // Automatically trigger the first question
+      const askBtn = popupEl.querySelector(`.${EXT_CLS_PREFIX}-btn-ask`);
+      if (askBtn) {
+        askBtn.click();
+      }
+    };
+
+    // If the image is already loaded and has dimensions, open the popup immediately
+    if (img.complete && img.naturalWidth > 0) {
+      createAndPositionPopup(img);
+    } else {
+      // If the image is not yet loaded, show a temporary loading state
+      const popup = createImagePopup(centeredPosition);
+      popup.bodyEl.textContent = 'Loading image...';
+      
+      // And wait for it to load before positioning the final popup
+      img.addEventListener('load', () => {
+        createAndPositionPopup(img);
+      }, { once: true });
+      
+      img.addEventListener('error', () => {
+        if (popupEl) popupEl.style.display = 'none';
+        console.error('Image failed to load.');
+      }, { once: true });
+    }
   }
   
   async function generateImageQuestion(img, container) {
@@ -887,6 +899,7 @@
     
     // Use the same question display as text popups with proper styling
     renderQuestionClickableBlock(container, finalQuestion, inputContainer);
+    scrollToBottom(container.parentElement);
     
     // Use the same response controls as text popups
     if (!inputContainer) {
@@ -1187,6 +1200,8 @@
       inputContainer.style.display = 'none';
       
       const answerContainer = renderResponseCard(targetEl, txt, inputContainer);
+      const isImageQuestion = targetEl.classList.contains(`${EXT_CLS_PREFIX}-image-question-container`);
+      scrollToBottom(isImageQuestion ? targetEl.parentElement : targetEl);
       
       // Show "Thinking..." state on the ask button
       setActionButtonsDisabled(true);
@@ -1194,9 +1209,6 @@
       if (askBtn) {
         askBtn.textContent = 'Thinking…';
       }
-      
-      // Check if this is an image question
-      const isImageQuestion = targetEl.classList.contains(`${EXT_CLS_PREFIX}-image-question-container`);
       
       // Evaluate the answer using Prompt API (page-side) when available
       try {
@@ -1423,6 +1435,7 @@
             renderQuestionClickableBlock(translationBodyEl, finalQ);
             attachResponseControls(translationBodyEl, currentDetectedLanguage);
           }
+          scrollToBottom(translationBodyEl);
           // Update input visibility after adding question
           updateInputVisibility(translationBodyEl);
         }
@@ -1535,8 +1548,12 @@
     const imagePopupStyles = {
       ...POPUP_STYLES,
       left: `${position.x}px`,
+      top: `${position.y}px`,
       transform: position.transform,
       width: '480px',
+      'max-height': '80vh',
+      'display': 'flex',
+      'flex-direction': 'column',
     };
     popupEl = createElement('div', `${EXT_CLS_PREFIX}-popup`, imagePopupStyles);
     
@@ -1546,7 +1563,9 @@
       fontSize: '18px',
       color: '#e5e7eb',
       marginBottom: '8px',
-      wordBreak: 'break-word'
+      wordBreak: 'break-word',
+      'overflow-y': 'auto',
+      'flex-grow': '1'
     });
     
     // No translation UI for image popups
@@ -1566,6 +1585,9 @@
       left: `${rect.left}px`,
       width: `${rect.width}px`,
       overflow: 'visible',
+      'max-height': '80vh',
+      'display': 'flex',
+      'flex-direction': 'column',
     };
     popupEl = createElement('div', `${EXT_CLS_PREFIX}-overlay`, textOverlayStyles);
 
@@ -1575,7 +1597,9 @@
       lineHeight: '1.8',
       fontSize: '19px',
       color: '#e5e7eb',
-      marginBottom: '8px'
+      marginBottom: '8px',
+      'overflow-y': 'auto',
+      'flex-shrink': '0'
     });
 
     renderClickableWords(wordsContainer, text);
@@ -1584,7 +1608,9 @@
     translationBodyEl = createElement('div', '', {
       fontSize: '18px',
       color: '#e5e7eb',
-      marginTop: '8px'
+      marginTop: '8px',
+      'overflow-y': 'auto',
+      'flex-grow': '1'
     });
 
     popupEl.appendChild(wordsContainer);
