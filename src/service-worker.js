@@ -68,13 +68,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'WEBLANG_PROMPT_REQUEST') {
     const tabId = sender.tab && sender.tab.id;
     if (!tabId) return;
-    const { id, text, mode } = message;
+    const { id, text, mode, history, existingQuestions } = message;
     (async () => {
       try {
         await chrome.scripting.executeScript({
           target: { tabId },
           world: 'MAIN',
-          files: ['page-prompt.js']
+          files: ['prompts.js', 'page-prompt.js']
         });
       } catch (e) {
         // ignore if already injected
@@ -83,10 +83,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await chrome.scripting.executeScript({
           target: { tabId },
           world: 'MAIN',
-          func: (rid, payload, m) => {
-            window.dispatchEvent(new CustomEvent('weblang-prompt-request', { detail: { id: rid, text: payload, mode: m || 'question' } }));
+          func: (rid, payload, m, h, eq) => {
+            window.dispatchEvent(new CustomEvent('weblang-prompt-request', { detail: { id: rid, text: payload, mode: m || 'question', history: h, existingQuestions: eq } }));
           },
-          args: [id, text, mode || 'question']
+          args: [id, text, mode || 'question', history, existingQuestions]
         });
       } catch (e) {
         // best-effort
@@ -96,23 +96,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'WEBLANG_EVAL_REQUEST') {
     const tabId = sender.tab && sender.tab.id;
     if (!tabId) return;
-    const { id, question, answer, context } = message;
+    const { id, question, answer, context, history } = message;
     (async () => {
       try {
         await chrome.scripting.executeScript({
           target: { tabId },
           world: 'MAIN',
-          files: ['page-prompt.js']
+          files: ['prompts.js', 'page-prompt.js']
         });
       } catch (e) {}
       try {
         await chrome.scripting.executeScript({
           target: { tabId },
           world: 'MAIN',
-          func: (rid, q, a, ctx) => {
-            window.dispatchEvent(new CustomEvent('weblang-eval-request', { detail: { id: rid, question: q, answer: a, context: ctx } }));
+          func: (rid, q, a, ctx, h) => {
+            window.dispatchEvent(new CustomEvent('weblang-eval-request', { detail: { id: rid, question: q, answer: a, context: ctx, history: h } }));
           },
-          args: [id, question, answer, context]
+          args: [id, question, answer, context, history]
         });
       } catch (e) {}
     })();
@@ -127,7 +127,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await chrome.scripting.executeScript({
           target: { tabId },
           world: 'MAIN',
-          files: ['page-prompt.js']
+          files: ['prompts.js', 'page-prompt.js']
         });
       } catch (e) {
         // ignore if already injected
@@ -156,7 +156,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await chrome.scripting.executeScript({
           target: { tabId },
           world: 'MAIN',
-          files: ['page-prompt.js']
+          files: ['prompts.js', 'page-prompt.js']
         });
       } catch (e) {
         // ignore if already injected
@@ -186,7 +186,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await chrome.scripting.executeScript({
           target: { tabId },
           world: 'MAIN',
-          files: ['page-prompt.js']
+          files: ['prompts.js', 'page-prompt.js']
         });
       } catch (e) {
         // ignore if already injected

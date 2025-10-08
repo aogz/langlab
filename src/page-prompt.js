@@ -5,6 +5,7 @@
     const text = String(detail.text || '');
     const mode = detail.mode || 'question';
     const existingQuestions = detail.existingQuestions || [];
+    const history = detail.history || [];
     if (!id) return;
     try {
       if (!("LanguageModel" in window)) throw new Error('Prompt API not supported in this browser. See docs: https://developer.chrome.com/docs/ai/prompt-api');
@@ -17,18 +18,9 @@
       });
       let prompt;
       if (mode === 'grammar') {
-        const sys = 'You are a helpful language teacher. Explain one key grammar point present in the learner\'s selected text, succinctly. Output 1-2 sentences in English.';
-        prompt = sys + "\n\nSelected text:\n\n" + text;
+        prompt = window.WEBLANG_PROMPTS.grammar(text);
       } else {
-        if (existingQuestions && existingQuestions.length > 0) {
-          const system = `You are a helpful language teacher. The student has already asked these questions about the text: ${existingQuestions.join(', ')}. 
-          
-          If the student has asked comprehensive questions about this text (3 or more), suggest they select another text block to continue learning. Otherwise, ask one new, different question in English about the following text that hasn't been covered yet. Output only the question or suggestion, no preface or explanation.`;
-          prompt = system + "\n\nSelected text:\n\n" + text;
-        } else {
-          const system = 'You are a helpful language teacher. Given a learner\'s selected text, ask one engaging question in English that tests comprehension of the text. Output only the question, no preface or explanation.';
-          prompt = system + "\n\nSelected text:\n\n" + text;
-        }
+        prompt = window.WEBLANG_PROMPTS.question(text, existingQuestions, history);
       }
       const result = await session.prompt(prompt);
       const out = (typeof result === 'string' && result.trim()) ? result.trim() : '';
@@ -59,6 +51,7 @@
     const question = String(d.question || '');
     const answer = String(d.answer || '');
     const ctx = String(d.context || '');
+    const history = d.history || [];
     if (!id) return;
     try {
       if (!("LanguageModel" in window)) throw new Error('Prompt API not supported in this browser.');
@@ -69,7 +62,7 @@
       const session = await window.LanguageModel.create({
         outputLanguage: 'en'
       });
-      const prompt = `You are a language teacher. Evaluate the student's short answer to the question based on the provided context. Output only a concise verdict in English with one of: Correct, Partially correct, Incorrect. Add a 1-sentence explanation or improvement.\n\nContext:\n${ctx}\n\nQuestion:\n${question}\n\nStudent answer:\n${answer}`;
+      const prompt = window.WEBLANG_PROMPTS.evaluate(ctx, question, answer, history);
       const result = await session.prompt(prompt);
       const out = (typeof result === 'string' && result.trim()) ? result.trim() : 'No evaluation.';
       window.dispatchEvent(new CustomEvent('weblang-eval-result', {
@@ -109,17 +102,8 @@
       });
 
       // Create multimodal prompt with audio input
-      const prompt = {
-        text: `Transcribe the following audio to text. Return only the transcribed text, no additional commentary.`,
-        parts: [{
-          text: `Transcribe the following audio to text. Return only the transcribed text, no additional commentary.`
-        }, {
-          inlineData: {
-            mimeType: 'audio/webm',
-            data: audioData
-          }
-        }]
-      };
+      const prompt = window.WEBLANG_PROMPTS.transcribe();
+      prompt.parts[1].inlineData.data = audioData;
 
       const result = await session.prompt(prompt);
       const out = (typeof result === 'string' && result.trim()) ? result.trim() : '';
@@ -164,16 +148,7 @@
       });
 
       // Create multimodal prompt with audio input for teacher feedback
-      const prompt = [{
-        role: "user",
-        content: [{
-          type: "text",
-          value: "You are a helpful language teacher. The student has provided an audio answer. Please listen to the audio and provide constructive feedback on their pronunciation, grammar, and language usage. Be encouraging and specific about what they did well and what they can improve. Keep your response concise but helpful."
-        }, {
-          type: "audio",
-          value: audioBlob
-        }]
-      }];
+      const prompt = window.WEBLANG_PROMPTS.teacherFeedback(audioBlob);
 
       const result = await session.prompt(prompt);
       const out = (typeof result === 'string' && result.trim()) ? result.trim() : '';
@@ -249,16 +224,7 @@
       });
 
       // Create multimodal prompt with image input for question generation
-      const prompt = [{
-        role: "user",
-        content: [{
-          type: "text",
-          value: "You are a helpful language teacher. Look at this image and ask one engaging question in English that tests the student's ability to describe, analyze, or discuss what they see in the image. The question should be appropriate for language learning and encourage detailed responses. Output only the question, no preface or explanation."
-        }, {
-          type: "image",
-          value: imageBlob
-        }]
-      }];
+      const prompt = window.WEBLANG_PROMPTS.imageQuestion(imageBlob);
 
       console.log('Sending prompt to LanguageModel with image data');
       const result = await session.prompt(prompt);

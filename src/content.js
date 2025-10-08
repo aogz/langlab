@@ -881,8 +881,8 @@
     return translated || question || '';
   }
 
-  async function generateAndTranslateQuestion(selectedText, existingQuestions = []) {
-    const q = await askQuestionWithPromptAPI(selectedText, existingQuestions);
+  async function generateAndTranslateQuestion(selectedText, existingQuestions = [], conversationHistory = []) {
+    const q = await askQuestionWithPromptAPI(selectedText, existingQuestions, conversationHistory);
     return await translateQuestionToLearningLanguage(q);
   }
 
@@ -1213,9 +1213,41 @@
       // Evaluate the answer using Prompt API (page-side) when available
       try {
         const requestId = `weblang_eval_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-        const contextText = isImageQuestion ? 
-          'Image-based question' : 
+        const questionEl = Array.from(targetEl.querySelectorAll(`.${EXT_CLS_PREFIX}-question-block`)).pop();
+        const questionText = questionEl ? questionEl.textContent.trim().replace(/^Question/, '').trim() : 'Describe the image.';
+
+        const contextText = isImageQuestion ?
+          'Image-based question' :
           (overlayWordsContainerEl && overlayWordsContainerEl.textContent) || (popupWordsContainerEl && popupWordsContainerEl.textContent) || '';
+
+        const conversationHistory = [];
+        if (targetEl) {
+            const children = Array.from(targetEl.children);
+            for (const child of children) {
+                if (child.classList.contains(`${EXT_CLS_PREFIX}-question-block`)) {
+                    const qText = (child.textContent || '').trim().replace(/^Question/, '').trim();
+                    if (qText) {
+                        conversationHistory.push({ role: 'assistant', content: qText });
+                    }
+                } else if (child.classList.contains(`${EXT_CLS_PREFIX}-answer-container`)) {
+                    const answerBubble = child.querySelector('div > div[style*="background: rgb(37, 99, 235)"]');
+                    if (answerBubble) {
+                        const answerText = answerBubble.textContent.trim();
+                        if (answerText) {
+                            conversationHistory.push({ role: 'user', content: answerText });
+                        }
+                    }
+                    const evaluationEl = child.querySelector('div[style*="font-style: italic"]');
+                    if (evaluationEl) {
+                        const evaluationText = evaluationEl.textContent.trim();
+                        if (evaluationText) {
+                            conversationHistory.push({ role: 'assistant', content: evaluationText });
+                        }
+                    }
+                }
+            }
+        }
+
         const onEval = (e) => {
           try {
             if (!e || !e.detail || e.detail.id !== requestId) return;
@@ -1248,7 +1280,7 @@
           } catch {}
         };
         window.addEventListener('weblang-eval-result', onEval, true);
-        chrome.runtime && chrome.runtime.sendMessage({ type: 'WEBLANG_EVAL_REQUEST', id: requestId, question: contextText, answer: txt, context: contextText });
+        chrome.runtime && chrome.runtime.sendMessage({ type: 'WEBLANG_EVAL_REQUEST', id: requestId, question: questionText, answer: txt, context: contextText, history: conversationHistory });
       } catch {
         // Re-enable ask button on error
         setActionButtonsDisabled(false);
@@ -1313,7 +1345,7 @@
   }
 
   // Prompt API (Gemini Nano) helper executed in the PAGE context (not content script)
-  async function askQuestionWithPromptAPI(selectedText, existingQuestions = []) {
+  async function askQuestionWithPromptAPI(selectedText, existingQuestions = [], conversationHistory = []) {
     const requestId = `weblang_prompt_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     return new Promise((resolve, reject) => {
       const onResult = (e) => {
@@ -1337,7 +1369,8 @@
           type: 'WEBLANG_PROMPT_REQUEST', 
           id: requestId, 
           text: String(selectedText||''),
-          existingQuestions: existingQuestions
+          existingQuestions: existingQuestions,
+          history: conversationHistory
         });
       } catch (err) {
         window.removeEventListener('weblang-prompt-result', onResult, true);
@@ -1385,15 +1418,37 @@
             
             // Collect existing questions for context
             const existingQuestions = [];
-            const questionBlocks = popupBodyRef.querySelectorAll(`.${EXT_CLS_PREFIX}-question-block`);
-            questionBlocks.forEach(block => {
-              const questionText = block.textContent || '';
-              if (questionText.trim()) {
-                existingQuestions.push(questionText.trim());
-              }
-            });
+            const conversationHistory = [];
+            const messageContainer = popupBodyRef;
+            if (messageContainer) {
+                const children = Array.from(messageContainer.children);
+                for (const child of children) {
+                    if (child.classList.contains(`${EXT_CLS_PREFIX}-question-block`)) {
+                        const questionText = (child.textContent || '').trim().replace(/^Question/, '').trim();
+                        if (questionText) {
+                            existingQuestions.push(questionText);
+                            conversationHistory.push({ role: 'assistant', content: questionText });
+                        }
+                    } else if (child.classList.contains(`${EXT_CLS_PREFIX}-answer-container`)) {
+                        const answerBubble = child.querySelector('div > div[style*="background: rgb(37, 99, 235)"]');
+                        if (answerBubble) {
+                            const answerText = answerBubble.textContent.trim();
+                            if (answerText) {
+                                conversationHistory.push({ role: 'user', content: answerText });
+                            }
+                        }
+                        const evaluationEl = child.querySelector('div[style*="font-style: italic"]');
+                        if (evaluationEl) {
+                            const evaluationText = evaluationEl.textContent.trim();
+                            if (evaluationText) {
+                                conversationHistory.push({ role: 'assistant', content: evaluationText });
+                            }
+                        }
+                    }
+                }
+            }
             
-            const finalQ = await generateAndTranslateQuestion(selectedText, existingQuestions);
+            const finalQ = await generateAndTranslateQuestion(selectedText, existingQuestions, conversationHistory);
             if (popupBodyRef) {
               // Insert question before the input container if it exists
               const inputContainer = popupBodyRef.querySelector(`.${EXT_CLS_PREFIX}-input-container`);
@@ -1416,15 +1471,37 @@
           
           // Collect existing questions for context
           const existingQuestions = [];
-          const questionBlocks = translationBodyEl.querySelectorAll(`.${EXT_CLS_PREFIX}-question-block`);
-          questionBlocks.forEach(block => {
-            const questionText = block.textContent || '';
-            if (questionText.trim()) {
-              existingQuestions.push(questionText.trim());
-            }
-          });
+          const conversationHistory = [];
+          const messageContainer = translationBodyEl;
+          if (messageContainer) {
+              const children = Array.from(messageContainer.children);
+              for (const child of children) {
+                  if (child.classList.contains(`${EXT_CLS_PREFIX}-question-block`)) {
+                      const questionText = (child.textContent || '').trim().replace(/^Question/, '').trim();
+                      if (questionText) {
+                          existingQuestions.push(questionText);
+                          conversationHistory.push({ role: 'assistant', content: questionText });
+                      }
+                  } else if (child.classList.contains(`${EXT_CLS_PREFIX}-answer-container`)) {
+                      const answerBubble = child.querySelector('div > div[style*="background: rgb(37, 99, 235)"]');
+                      if (answerBubble) {
+                          const answerText = answerBubble.textContent.trim();
+                          if (answerText) {
+                              conversationHistory.push({ role: 'user', content: answerText });
+                          }
+                      }
+                      const evaluationEl = child.querySelector('div[style*="font-style: italic"]');
+                      if (evaluationEl) {
+                          const evaluationText = evaluationEl.textContent.trim();
+                          if (evaluationText) {
+                              conversationHistory.push({ role: 'assistant', content: evaluationText });
+                          }
+                      }
+                  }
+              }
+          }
           
-          const finalQ = await generateAndTranslateQuestion(selectedText, existingQuestions);
+          const finalQ = await generateAndTranslateQuestion(selectedText, existingQuestions, conversationHistory);
           // Append new question instead of replacing
           if (hasExistingContent) {
             // Insert question before the input container
