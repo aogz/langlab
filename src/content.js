@@ -51,16 +51,6 @@
   }
 
   const BUTTON_STYLES = {
-    lang: {
-      padding: '6px 10px',
-      background: 'rgba(31,41,55,0.6)',
-      border: '1px solid rgba(75,85,99,0.7)',
-      color: '#e5e7eb',
-      fontSize: '12px',
-      borderRadius: '8px',
-      cursor: 'default',
-      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif'
-    },
     primary: {
       padding: '8px 12px',
       background: '#2563eb',
@@ -79,19 +69,6 @@
       fontSize: '13px',
       borderRadius: '8px',
       cursor: 'pointer',
-      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif'
-    },
-    save: {
-      width: '100%',
-      padding: '8px 12px',
-      background: '#10b981',
-      border: 'none',
-      color: '#fff',
-      borderRadius: '8px',
-      fontSize: '13px',
-      cursor: 'pointer',
-      marginTop: '12px',
-      fontWeight: '500',
       fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif'
     }
   };
@@ -114,7 +91,7 @@
   }
 
   function createSaveToVocabButton(translationText) {
-    const saveBtn = createButton('Add to Vocab', 'save');
+    const saveBtn = createButton('Add to Vocab', 'primary');
     
     saveBtn.addEventListener('click', async () => {
       animateVocabButton();
@@ -123,7 +100,7 @@
         if (result.success) {
           if (result.isNewWord) {
             saveBtn.textContent = 'Added!';
-            saveBtn.style.background = '#059669';
+            saveBtn.style.background = '#2563eb';
           } else {
             saveBtn.textContent = 'Updated!';
             saveBtn.style.background = '#f59e0b';
@@ -134,14 +111,14 @@
         }
         setTimeout(() => {
           saveBtn.textContent = 'Add to Vocab';
-          saveBtn.style.background = '#10b981';
+          saveBtn.style.background = '#2563eb';
         }, 1500);
       } catch (error) {
         saveBtn.textContent = 'Error';
         saveBtn.style.background = '#ef4444';
         setTimeout(() => {
           saveBtn.textContent = 'Add to Vocab';
-          saveBtn.style.background = '#10b981';
+          saveBtn.style.background = '#2563eb';
         }, 1500);
       }
     });
@@ -305,9 +282,8 @@
 
     // Add save button if we have translation text and selected word
     if (!isTranslating && text && text.trim() && selectedWord) {
-      const saveBtn = createButton('Add to Vocab', 'primary');
+      const saveBtn = createButton('📚 Add to Vocab', 'primary');
       applyStyles(saveBtn, {
-        width: '100%',
         padding: '4px 6px',
         fontSize: '11px',
         marginTop: '4px',
@@ -320,7 +296,7 @@
           const result = await saveWordToVocab(text.trim());
           if (result.success) {
             saveBtn.textContent = result.isNewWord ? 'Added!' : 'Updated!';
-            saveBtn.style.background = result.isNewWord ? '#10b981' : '#f59e0b';
+            saveBtn.style.background = result.isNewWord ? '#2563eb' : '#f59e0b';
           } else {
             saveBtn.textContent = 'Already exists';
             saveBtn.style.background = '#6b7280';
@@ -352,14 +328,18 @@
     container.innerHTML = '';
     
     if (includeAnimation) {
+      const card = createElement('div', '', {
+        border: '1px solid rgba(75,85,99,0.9)',
+        background: 'rgba(17,24,39,0.9)',
+        borderRadius: '12px',
+        padding: '12px 14px',
+        boxShadow: '0 8px 22px rgba(0,0,0,0.30)'
+      });
+
       const wrapper = createElement('div', '', {
         display: 'flex',
         alignItems: 'center',
-        gap: '10px',
-        padding: '6px 8px',
-        border: '1px dashed rgba(75,85,99,0.7)',
-        borderRadius: '10px',
-        background: 'rgba(31,41,55,0.6)'
+        gap: '10px'
       });
       
       const dot = createElement('div', '', {
@@ -370,15 +350,18 @@
         opacity: '0.9'
       });
       
-      const text = createElement('div', '', {
-        fontSize: '16px',
-        color: '#e5e7eb'
+      const textEl = createElement('div', '', {
+        fontSize: '18px',
+        lineHeight: '1.7',
+        color: '#f3f4f6',
+        fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif'
       });
-      text.textContent = message || 'Translating…';
+      textEl.textContent = message || 'Translating…';
       
       wrapper.appendChild(dot);
-      wrapper.appendChild(text);
-      container.appendChild(wrapper);
+      wrapper.appendChild(textEl);
+      card.appendChild(wrapper)
+      container.appendChild(card);
     } else {
       const wrap = createElement('div', '', {
         fontSize: '16px',
@@ -424,7 +407,7 @@
   }
 
   function setPopupTranslationLoading(bodyEl, message) {
-    showLoadingIndicator(bodyEl, message, false);
+    showLoadingIndicator(bodyEl, message, true);
   }
 
   function setPopupTranslationResult(bodyEl, resultText) {
@@ -548,15 +531,28 @@
   }
 
   function attachImageClickHandlers() {
-    // Add floating buttons to all images
     const images = document.querySelectorAll('img');
-    console.log(`Found ${images.length} images to process`);
-    images.forEach((img, index) => {
-      if (img.dataset.weblangImageHandler) return; // Already has handler
-      
-      console.log(`Processing image ${index + 1}:`, img.src, img.alt);
-      img.dataset.weblangImageHandler = 'true';
-      addFloatingButtonToImage(img);
+    images.forEach((img) => {
+      if (img.dataset.weblangImageHandler) return;
+      img.dataset.weblangImageHandler = 'processing';
+
+      const processImage = () => {
+        if (img.clientWidth > 250) {
+          img.dataset.weblangImageHandler = 'true';
+          addFloatingButtonToImage(img);
+        } else {
+          img.dataset.weblangImageHandler = 'ignored-small';
+        }
+      };
+
+      if (img.complete && img.naturalWidth > 0) {
+        processImage();
+      } else {
+        img.addEventListener('load', processImage, { once: true });
+        img.addEventListener('error', () => {
+          img.dataset.weblangImageHandler = 'ignored-error';
+        }, { once: true });
+      }
     });
   }
   
@@ -575,37 +571,8 @@
     });
     
     // Create the floating button
-    const button = createElement('button', `${EXT_CLS_PREFIX}-image-button`, {
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      backgroundSize: '200% 200%',
-      color: '#ffffff',
-      border: 'none',
-      borderRadius: '25px',
-      padding: '8px 16px',
-      fontSize: '12px',
-      fontWeight: '600',
-      cursor: 'pointer',
-      boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4), 0 2px 8px rgba(0,0,0,0.2)',
-      transition: 'all 0.3s ease',
-      backdropFilter: 'blur(8px)',
-      border: '1px solid rgba(255,255,255,0.2)',
-      textShadow: '0 1px 2px rgba(0,0,0,0.3)',
-      animation: 'weblang-gradient-pulse 3s ease-in-out infinite'
-    });
-    button.textContent = '🧪 Discuss in LangLab';
-    
-    // Add hover effects
-    button.addEventListener('mouseenter', () => {
-      button.style.background = 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)';
-      button.style.transform = 'scale(1.08) translateY(-2px)';
-      button.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.6), 0 4px 12px rgba(0,0,0,0.3)';
-    });
-    
-    button.addEventListener('mouseleave', () => {
-      button.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-      button.style.transform = 'scale(1) translateY(0)';
-      button.style.boxShadow = '0 4px 15px rgba(102, 126, 234, 0.4), 0 2px 8px rgba(0,0,0,0.2)';
-    });
+    const button = createButton('🧪 Discuss in LangLab', 'secondary');
+    button.classList.add(`${EXT_CLS_PREFIX}-image-button`);
     
     button.addEventListener('click', (e) => {
       e.preventDefault();
@@ -704,8 +671,11 @@
     
     body.appendChild(imgPreview);
     
-    // Set popupBodyRef for image popups (needed by buildControlsBar)
-    popupBodyRef = body;
+    const questionContainer = createElement('div', `${EXT_CLS_PREFIX}-image-question-container`);
+    body.appendChild(questionContainer);
+
+    // Set popupBodyRef for image popups (needed by buildControlsBar to target the right container)
+    popupBodyRef = questionContainer;
     
     // Add the body to the popup first
     popupEl.appendChild(body);
@@ -719,48 +689,14 @@
   
   async function generateImageQuestion(img, container) {
     try {
-      // Show loading state with same styling as text popups
-      const wrapper = createElement('div', '', {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-        padding: '6px 8px',
-        border: '1px dashed rgba(75,85,99,0.7)',
-        borderRadius: '10px',
-        background: 'rgba(31,41,55,0.6)',
-        marginBottom: '12px'
-      });
-      
-      const dot = createElement('div', '', {
-        width: '10px',
-        height: '10px',
-        borderRadius: '9999px',
-        background: '#60a5fa',
-        opacity: '0.9'
-      });
-      
-      const text = createElement('div', '', {
-        fontSize: '16px',
-        color: '#e5e7eb'
-      });
-      text.textContent = 'Generating question…';
-      
-      wrapper.appendChild(dot);
-      wrapper.appendChild(text);
-      container.appendChild(wrapper);
-      
-      // Get image data via service worker to bypass CORS
       let imageData;
       try {
         imageData = await getImageDataViaServiceWorker(img);
       } catch (error) {
-        text.textContent = `Error: ${error.message}`;
-        text.style.color = '#ef4444';
-        dot.style.background = '#ef4444';
+        showTranslationResult(container, `Error: ${error.message}`);
         return;
       }
       
-      // Convert Blob to base64 before sending to service worker
       let base64Data = null;
       let mimeType = 'image/jpeg';
       
@@ -770,9 +706,8 @@
         const uint8Array = new Uint8Array(arrayBuffer);
         console.log('ArrayBuffer size:', arrayBuffer.byteLength, 'Uint8Array length:', uint8Array.length);
         
-        // Convert to base64 in chunks to avoid stack overflow
         let binaryString = '';
-        const chunkSize = 8192; // Process in 8KB chunks
+        const chunkSize = 8192;
         for (let i = 0; i < uint8Array.length; i += chunkSize) {
           const chunk = uint8Array.slice(i, i + chunkSize);
           binaryString += String.fromCharCode.apply(null, chunk);
@@ -782,13 +717,10 @@
         console.log('Base64 conversion complete, length:', base64Data.length, 'mimeType:', mimeType);
         } catch (error) {
           console.error('Error converting blob to base64:', error);
-          text.textContent = `Error: ${error.message}`;
-          text.style.color = '#ef4444';
-          dot.style.background = '#ef4444';
+          showTranslationResult(container, `Error: ${error.message}`);
           return;
         }
       
-      // Send to prompt API
       const requestId = `weblang_image_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       
       return new Promise((resolve, reject) => {
@@ -805,9 +737,7 @@
               resolve(question);
             } else {
               const errMsg = e.detail.error || 'Failed to generate question';
-              text.textContent = `Error: ${errMsg}`;
-              text.style.color = '#ef4444';
-              dot.style.background = '#ef4444';
+              showTranslationResult(container, `Error: ${errMsg}`);
               reject(new Error(errMsg));
             }
           } catch (err) {
@@ -817,14 +747,11 @@
           }
         };
         
-        // Add timeout to prevent hanging
         const timeoutId = setTimeout(() => {
           window.removeEventListener('weblang-image-result', onResult, true);
-          text.textContent = 'Timeout: Request took too long';
-          text.style.color = '#ef4444';
-          dot.style.background = '#ef4444';
+          showTranslationResult(container, 'Timeout: Request took too long');
           reject(new Error('Image question generation timeout'));
-        }, 30000); // 30 second timeout
+        }, 30000);
         
         window.addEventListener('weblang-image-result', onResult, true);
         
@@ -948,13 +875,11 @@
   }
 
   async function displayImageQuestion(question, container, img) {
-    // Remove the loading wrapper
-    const loadingWrapper = container.querySelector('div[style*="border: 1px dashed"]');
-    if (loadingWrapper) {
-      loadingWrapper.remove();
+    const hasExistingContent = container.querySelector(`.${EXT_CLS_PREFIX}-question-block`);
+    if (!hasExistingContent) {
+      container.innerHTML = '';
     }
     
-    // Translate the question to the user's learning language
     const finalQuestion = await translateQuestionToLearningLanguage(question);
     const targetLang = (await getLearningLanguage()) || getDocumentLanguage() || 'en';
     
@@ -976,7 +901,6 @@
     const inputContainer = createElement('div', `${EXT_CLS_PREFIX}-input-container`, {
       position: 'sticky',
       bottom: '0',
-      background: 'rgba(17,24,39,0.95)',
       padding: '12px 0',
       borderTop: '1px solid rgba(75,85,99,0.3)',
       marginTop: '12px'
@@ -1005,19 +929,10 @@
       gap: '8px'
     });
 
-    const micBtn = createElement('button', '', {
-      padding: '10px',
-      borderRadius: '50%',
-      border: 'none',
-      background: 'rgba(37,99,235,0.1)',
-      color: '#2563eb',
-      cursor: 'pointer',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      transition: 'all 0.2s ease',
-      minWidth: '40px',
-      minHeight: '40px'
+    const micBtn = createButton('', 'secondary');
+    applyStyles(micBtn, {
+      padding: '8px',
+      minWidth: '40px'
     });
     micBtn.title = 'Speak your answer';
     micBtn.innerHTML = `
@@ -1032,28 +947,17 @@
     // Add hover effects
     micBtn.addEventListener('mouseenter', () => {
       if (!isRecording) {
-        micBtn.style.background = 'rgba(37,99,235,0.2)';
-        micBtn.style.transform = 'scale(1.05)';
+        micBtn.style.background = 'rgba(55,65,81,0.9)';
       }
     });
     
     micBtn.addEventListener('mouseleave', () => {
       if (!isRecording) {
-        micBtn.style.background = 'rgba(37,99,235,0.1)';
-        micBtn.style.transform = 'scale(1)';
+        micBtn.style.background = 'rgba(31,41,55,0.7)';
       }
     });
 
-    const sendBtn = createElement('button', '', {
-      padding: '8px 12px',
-      borderRadius: '8px',
-      border: 'none',
-      background: '#2563eb',
-      color: '#fff',
-      cursor: 'pointer'
-    });
-    sendBtn.title = 'Send';
-    sendBtn.textContent = 'Send';
+    const sendBtn = createButton('Send', 'primary');
 
     right.appendChild(micBtn);
     right.appendChild(sendBtn);
@@ -1118,9 +1022,8 @@
     
     
     function resetMicButton() {
-      micBtn.style.background = 'rgba(37,99,235,0.1)';
-      micBtn.style.color = '#2563eb';
-      micBtn.style.transform = 'scale(1)';
+      micBtn.style.background = 'rgba(31,41,55,0.7)';
+      micBtn.style.color = '#e5e7eb';
       micBtn.innerHTML = `
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z" fill="currentColor"/>
@@ -1261,7 +1164,6 @@
       // Set recording state with stop button
       micBtn.style.background = '#ef4444';
       micBtn.style.color = '#ffffff';
-      micBtn.style.transform = 'scale(1.1)';
       micBtn.innerHTML = `
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>
@@ -1435,47 +1337,11 @@
   function buildControlsBar(context, selectedText) {
     const bar = createElement('div', `${EXT_CLS_PREFIX}-controls`, {
       display: 'grid',
-      gridTemplateColumns: context === 'sidebar' ? 'auto 1fr auto' : 'auto 1fr auto',
+      gridTemplateColumns: context === 'sidebar' ? '1fr auto' : '1fr auto',
       alignItems: 'center',
       gap: '10px',
       marginTop: '10px'
     });
-
-    const langBtn = createButton('Detecting…', 'lang');
-    
-    // Store the promise so we can wait for it later
-    let languageDetectionPromise;
-    if (context === 'image-popup') {
-      // For image popups, use document language detection
-      languageDetectionPromise = Promise.resolve(getDocumentLanguage() || 'en').then((lang) => {
-        try {
-          langBtn.textContent = lang;
-          currentDetectedLanguage = lang;
-          return lang;
-        } catch (error) {
-          console.error('Error setting language for image popup:', error);
-          return 'en';
-        }
-      });
-    } else {
-      languageDetectionPromise = detectLanguageCode(selectedText, (msg)=>{ 
-      try { langBtn.textContent = msg; } catch {} 
-    }).then((code)=>{
-      try { 
-        const detectedLang = code || 'unknown';
-        console.log('Language detected for text:', selectedText, '->', detectedLang);
-        langBtn.textContent = detectedLang;
-        currentDetectedLanguage = detectedLang; // Store for reuse
-        return detectedLang;
-      } catch (error) {
-        console.error('Error in language detection:', error);
-        return 'unknown';
-      }
-    });
-    }
-    
-    // Store the promise globally so save functions can wait for it
-    window.currentLanguageDetectionPromise = languageDetectionPromise;
 
     const centerWrap = createElement('div', '', {
       display: 'flex',
@@ -1489,9 +1355,12 @@
       try {
         setActionButtonsDisabled(true); btnAsk.textContent = 'Asking…';
         if (context === 'image-popup') {
-          // Handle image popup question generation
           const img = popupEl ? popupEl.querySelector('img') : null;
-          if (img) {
+          if (img && popupBodyRef) {
+            const hasExistingContent = popupBodyRef.querySelector(`.${EXT_CLS_PREFIX}-question-block`);
+            if (!hasExistingContent) {
+              showLoadingIndicator(popupBodyRef, 'Generating question…', true);
+            }
             await generateImageQuestion(img, popupBodyRef);
           }
         } else if (context === 'popup') {
@@ -1591,7 +1460,6 @@
     });
 
     // Order: language button (left), center content, vocab button (right)
-    bar.appendChild(langBtn);
     bar.appendChild(centerWrap);
     bar.appendChild(btnVocab);
     return bar;
@@ -1625,28 +1493,54 @@
     } catch {}
   }
 
+  const POPUP_STYLES = {
+    position: 'fixed',
+    top: '48px',
+    pointerEvents: 'auto',
+    background: 'rgba(17,24,39,0.96)',
+    border: '1px solid rgba(75,85,99,0.9)',
+    color: '#e5e7eb',
+    borderRadius: '12px',
+    boxShadow: '0 16px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.04) inset',
+    padding: '14px',
+    fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif',
+    backdropFilter: 'blur(2px)',
+    webkitBackdropFilter: 'blur(2px)',
+    zIndex: '2147483647'
+  };
+
+  // ========== DRAG & INTERACTION HANDLERS ==========
+
+  function addDragHandlersToPopup(element) {
+    attachDragListeners();
+    element.addEventListener('mousedown', (e) => {
+      if (isInteractiveTarget(e.target)) return;
+      try {
+        isDraggingPopup = true;
+        const r = element.getBoundingClientRect();
+        element.style.transform = 'none';
+        dragOffsetX = e.clientX - r.left;
+        dragOffsetY = e.clientY - r.top;
+        e.preventDefault();
+        e.stopPropagation();
+      } catch {}
+    });
+  }
 
   function createImagePopup(position) {
     clearPopup();
     const container = ensureContainer();
     ensureBackdrop();
-    popupEl = createElement('div', `${EXT_CLS_PREFIX}-popup`, {
-      position: 'fixed',
+    
+    const imagePopupStyles = {
+      ...POPUP_STYLES,
       left: `${position.x}px`,
-      top: `48px`,
       transform: position.transform,
       width: '480px',
-      pointerEvents: 'auto',
-      background: 'rgba(17,24,39,0.96)',
-      border: '1px solid rgba(75,85,99,0.9)',
-      color: '#e5e7eb',
-      borderRadius: '12px',
-      boxShadow: '0 16px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.04) inset',
-      padding: '14px',
-      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif',
-      backdropFilter: 'none',
-      webkitBackdropFilter: 'none'
-    });
+    };
+    popupEl = createElement('div', `${EXT_CLS_PREFIX}-popup`, imagePopupStyles);
+    
+    addDragHandlersToPopup(popupEl);
 
     const body = createElement('div', '', {
       fontSize: '18px',
@@ -1667,41 +1561,15 @@
     const container = ensureContainer();
     ensureBackdrop();
 
-    popupEl = createElement('div', `${EXT_CLS_PREFIX}-overlay`, {
-      position: 'fixed',
+    const textOverlayStyles = {
+      ...POPUP_STYLES,
       left: `${rect.left}px`,
-      top: `48px`,
       width: `${rect.width}px`,
       overflow: 'visible',
-      pointerEvents: 'auto',
-      background: 'rgba(17,24,39,0.92)',
-      backdropFilter: 'blur(2px)',
-      border: '1px solid rgba(55,65,81,0.9)',
-      color: '#e5e7eb',
-      borderRadius: '12px',
-      boxShadow: '0 16px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.04) inset',
-      padding: '0',
-      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif',
-      zIndex: '2147483647'
-    });
+    };
+    popupEl = createElement('div', `${EXT_CLS_PREFIX}-overlay`, textOverlayStyles);
 
-    // Card-level drag: mousedown on non-interactive space starts drag
-    attachDragListeners();
-    popupEl.addEventListener('mousedown', (e) => {
-      if (isInteractiveTarget(e.target)) return;
-      try {
-        isDraggingPopup = true;
-        const r = popupEl.getBoundingClientRect();
-        popupEl.style.transform = 'none';
-        dragOffsetX = e.clientX - r.left;
-        dragOffsetY = e.clientY - r.top;
-        e.preventDefault();
-        e.stopPropagation();
-      } catch {}
-    });
-
-    // Content wrapper
-    popupContentEl = createElement('div', '', { padding: '14px' });
+    addDragHandlersToPopup(popupEl);
 
     const wordsContainer = createElement('div', '', {
       lineHeight: '1.8',
@@ -1719,12 +1587,11 @@
       marginTop: '8px'
     });
 
-    popupContentEl.appendChild(wordsContainer);
-    popupContentEl.appendChild(translationBodyEl);
+    popupEl.appendChild(wordsContainer);
+    popupEl.appendChild(translationBodyEl);
     const controlsBar = buildControlsBar('overlay', text);
-    popupContentEl.appendChild(controlsBar);
+    popupEl.appendChild(controlsBar);
 
-    popupEl.appendChild(popupContentEl);
     container.appendChild(popupEl);
 
     // Manage paragraph styles while overlay is open

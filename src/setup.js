@@ -186,13 +186,14 @@ import { languages, populateLanguageSelect, checkLanguagePairAvailability } from
       }
     } catch (error) {
       console.error('Failed to save settings:', error);
-      saveBtn.textContent = 'Get Started';
+      saveBtn.textContent = 'Start Learning';
       saveBtn.disabled = false;
     }
   }
 
   // Handle skip button
-  async function handleSkip() {
+  async function handleSkip(e) {
+    e.preventDefault();
     skipBtn.textContent = 'Skipping...';
     skipBtn.disabled = true;
 
@@ -210,7 +211,7 @@ import { languages, populateLanguageSelect, checkLanguagePairAvailability } from
       }
     } catch (error) {
       console.error('Failed to save settings:', error);
-      skipBtn.textContent = 'Skip for now';
+      skipBtn.textContent = `I'll do this later`;
       skipBtn.disabled = false;
     }
   }

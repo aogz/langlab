@@ -502,4 +502,29 @@ async function saveWordToVocab(selectedWord, translationText, url, title, detect
   }
 }
 
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete' && tab.url && tab.url.startsWith('http')) {
+    const data = await chrome.storage.local.get('weblangLearnLang');
+    const learningLang = data.weblangLearnLang;
+
+    if (learningLang) {
+      chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        function: () => document.documentElement.lang
+      }, (results) => {
+        if (results && results[0] && results[0].result === learningLang) {
+          chrome.scripting.insertCSS({
+            target: { tabId: tabId },
+            files: ['styles.css']
+          });
+          chrome.scripting.executeScript({
+            target: { tabId: tabId },
+            files: ['content.js']
+          });
+        }
+      });
+    }
+  }
+});
+
 
