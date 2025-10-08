@@ -1,11 +1,4 @@
 /* Minimal styles; most inline in content.js to avoid collisions */
-.weblang-ext-word {
-  /* marker class for query; visual styles applied inline to avoid site overrides */
-}
-.weblang-ext-popup {
-  /* popup base class; styled inline */
-}
-
 @keyframes weblang-gradient-spin {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
@@ -16,5 +9,24 @@
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
+}
+
+@keyframes weblang-vocab-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4);
+  }
+  70% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 10px rgba(37, 99, 235, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+  }
+}
+
+.weblang-ext-btn-vocab-animate {
+  animation: weblang-vocab-pulse 0.5s ease-in-out;
 }
 

@@ -58,7 +58,8 @@
       color: '#e5e7eb',
       fontSize: '12px',
       borderRadius: '8px',
-      cursor: 'default'
+      cursor: 'default',
+      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif'
     },
     primary: {
       padding: '8px 12px',
@@ -67,7 +68,8 @@
       color: '#fff',
       fontSize: '13px',
       borderRadius: '8px',
-      cursor: 'pointer'
+      cursor: 'pointer',
+      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif'
     },
     secondary: {
       padding: '8px 12px',
@@ -76,7 +78,8 @@
       color: '#e5e7eb',
       fontSize: '13px',
       borderRadius: '8px',
-      cursor: 'pointer'
+      cursor: 'pointer',
+      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif'
     },
     save: {
       width: '100%',
@@ -88,7 +91,8 @@
       fontSize: '13px',
       cursor: 'pointer',
       marginTop: '12px',
-      fontWeight: '500'
+      fontWeight: '500',
+      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif'
     }
   };
 
@@ -99,10 +103,21 @@
     return btn;
   }
 
+  function animateVocabButton() {
+    const vocabBtn = document.querySelector(`.${EXT_CLS_PREFIX}-btn-vocab`);
+    if (vocabBtn) {
+      vocabBtn.classList.add(`${EXT_CLS_PREFIX}-btn-vocab-animate`);
+      setTimeout(() => {
+        vocabBtn.classList.remove(`${EXT_CLS_PREFIX}-btn-vocab-animate`);
+      }, 500);
+    }
+  }
+
   function createSaveToVocabButton(translationText) {
     const saveBtn = createButton('Add to Vocab', 'save');
     
     saveBtn.addEventListener('click', async () => {
+      animateVocabButton();
       try {
         const result = await saveWordToVocab(translationText.trim());
         if (result.success) {
@@ -300,6 +315,7 @@
       });
       
       saveBtn.addEventListener('click', async () => {
+        animateVocabButton();
         try {
           const result = await saveWordToVocab(text.trim());
           if (result.success) {
@@ -390,7 +406,8 @@
       lineHeight: '1.7',
       color: '#f3f4f6',
       whiteSpace: 'pre-wrap',
-      wordBreak: 'break-word'
+      wordBreak: 'break-word',
+      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif'
     });
     text.textContent = resultText || 'Translation not available.';
     card.appendChild(text);
