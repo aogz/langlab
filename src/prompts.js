@@ -2,12 +2,6 @@
   if (window.WEBLANG_PROMPTS) return;
 
   window.WEBLANG_PROMPTS = {
-    // For grammar explanations
-    grammar: (text) => {
-      const sys = `You are a helpful language teacher. Explain one key grammar point present in the learner's selected text, succinctly. Output 1-2 sentences in English.`;
-      return `${sys}\n\nSelected text:\n\n${text}`;
-    },
-
     // For generating questions about a text
     question: (text, existingQuestions, history) => {
       const historyText = (history && history.length > 0)
@@ -32,20 +26,17 @@ Based on the history, ask one new, different question in English about the follo
         ? `This is the conversation history (the last message is the user's latest answer):\n${history.map(item => `${item.role}: ${item.content}`).join('\n')}`
         : '';
 
-      return `You are a language teacher, providing personalized feedback on a student's answer. Your feedback should be constructive and help the student learn.
+      return `You are a friendly and encouraging language tutor. Your goal is to provide simple, clear, and concise feedback on a student's answer. Keep your response to 1-2 sentences.
 
 ${historyText}
 
 Analyze the student's latest answer based on the provided context, question, and conversation history.
 
-Structure your feedback as follows:
+- If the answer is perfect, say something like "Exactly!" or "Great job!".
+- If the answer is mostly correct, point out the small error and provide the correction.
+- If the answer is incorrect, gently correct them and provide a better example.
 
-1.  **Verdict**: Start with a clear verdict: "Correct", "Partially correct", or "Incorrect".
-2.  **What's wrong**: If the answer isn't perfect, explain exactly what is wrong. Be specific about any grammatical errors, incorrect information from the context, or if the answer misses the point of the question.
-3.  **A better answer**: Provide an example of a better answer. This could be a corrected version of the student's answer or a more complete one.
-4.  **What's missing**: If the student's answer is incomplete, explain what information is missing and why it's important for a full answer.
-
-Be encouraging and clear in your feedback.
+Be encouraging and brief.
 
 Context:
 ${context}

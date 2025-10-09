@@ -16,31 +16,24 @@
       const session = await window.LanguageModel.create({
         outputLanguage: 'en'
       });
-      let prompt;
-      if (mode === 'grammar') {
-        prompt = window.WEBLANG_PROMPTS.grammar(text);
-      } else {
-        prompt = window.WEBLANG_PROMPTS.question(text, existingQuestions, history);
-      }
+      let prompt = window.WEBLANG_PROMPTS.question(text, existingQuestions, history);
       const result = await session.prompt(prompt);
       const out = (typeof result === 'string' && result.trim()) ? result.trim() : '';
       if (!out) throw new Error('Model returned an empty response.');
-      window.dispatchEvent(new CustomEvent('weblang-prompt-result', {
-        detail: {
-          id,
-          ok: true,
-          result: out
-        }
-      }));
+      window.postMessage({
+        type: 'WEBLANG_PROMPT_RESULT',
+        id,
+        ok: true,
+        result: out
+      }, window.location.origin);
     } catch (e) {
       const msg = (e && e.message) ? e.message : 'Unknown error';
-      window.dispatchEvent(new CustomEvent('weblang-prompt-result', {
-        detail: {
-          id,
-          ok: false,
-          error: msg
-        }
-      }));
+      window.postMessage({
+        type: 'WEBLANG_PROMPT_RESULT',
+        id,
+        ok: false,
+        error: msg
+      }, window.location.origin);
     }
   }
   window.addEventListener('weblang-prompt-request', handle, true);
@@ -179,23 +172,13 @@
     const imageData = d.imageData;
     const mimeType = d.mimeType;
     const language = d.language || 'en';
-    console.log('Page-prompt received image request:', id, imageData);
     if (!id || !imageData) {
-      console.log('No image data received');
       return;
     };
     try {
-      console.log('Image data received:', imageData);
-      console.log('Image data type:', typeof imageData);
-      console.log('Image data constructor:', imageData.constructor.name);
-      console.log('MIME type:', mimeType);
-      console.log('Is string?', typeof imageData === 'string');
-      console.log('Is object?', typeof imageData === 'object');
-
       // Convert base64 to Blob if needed
       let imageBlob = imageData;
       if (typeof imageData === 'string') {
-        console.log('Converting base64 to Blob...');
         const binaryString = atob(imageData);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
@@ -204,11 +187,6 @@
         imageBlob = new Blob([bytes], {
           type: mimeType || 'image/jpeg'
         });
-        console.log('Created blob:', imageBlob.size, 'bytes, type:', imageBlob.type);
-      }
-
-      if (imageBlob instanceof Blob) {
-        console.log('Blob size:', imageBlob.size, 'type:', imageBlob.type);
       }
 
       if (!("LanguageModel" in window)) throw new Error('Prompt API not supported in this browser.');
@@ -226,7 +204,6 @@
       // Create multimodal prompt with image input for question generation
       const prompt = window.WEBLANG_PROMPTS.imageQuestion(imageBlob);
 
-      console.log('Sending prompt to LanguageModel with image data');
       const result = await session.prompt(prompt);
       const out = (typeof result === 'string' && result.trim()) ? result.trim() : '';
       if (!out) throw new Error('Model returned an empty response.');
@@ -238,9 +215,7 @@
         }
       }));
     } catch (e) {
-      console.error('Error in imageHandle:', e);
       const msg = (e && e.message) ? e.message : 'Unknown error';
-      console.error('Error message:', msg);
       window.dispatchEvent(new CustomEvent('weblang-image-result', {
         detail: {
           id,

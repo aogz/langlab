@@ -63,7 +63,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           files: ['prompts.js', 'page-prompt.js']
         });
       } catch (e) {
-        // ignore if already injected
+        
+        return;
       }
       try {
         await chrome.scripting.executeScript({
@@ -75,7 +76,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           args: [id, text, mode || 'question', history, existingQuestions]
         });
       } catch (e) {
-        // best-effort
+        
       }
     })();
   }
@@ -166,7 +167,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const tabId = sender.tab && sender.tab.id;
     if (!tabId) return;
     const { id, imageData, mimeType, language } = message;
-    console.log('Service worker received image request:', id, typeof imageData, 'mimeType:', mimeType);
     (async () => {
       try {
         await chrome.scripting.executeScript({
@@ -179,7 +179,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       
       try {
-        console.log('Passing base64 data to page-prompt, length:', imageData ? imageData.length : 'null');
         await chrome.scripting.executeScript({
           target: { tabId },
           world: 'MAIN',
@@ -189,7 +188,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           args: [id, imageData, mimeType, language || 'en']
         });
       } catch (e) {
-        console.error('Error passing data to page-prompt:', e);
+        
       }
     })();
   }

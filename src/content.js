@@ -84,6 +84,7 @@
 
   function createButton(text, styleType = 'primary', onClick) {
     const btn = createElement('button', '', BUTTON_STYLES[styleType]);
+    btn.classList.add(styleType);
     btn.textContent = text;
     if (onClick) btn.addEventListener('click', onClick);
     return btn;
@@ -439,19 +440,12 @@
       borderRadius: '14px',
       padding: '10px 12px'
     });
-    const header = createElement('div', '', {
-      color: 'rgba(209,213,219,0.9)',
-      fontSize: '12px',
-      marginBottom: '4px'
-    });
-    header.textContent = 'Question';
     const words = createElement('div', '', {
       lineHeight: '1.8',
       fontSize: '18px',
       color: '#e5e7eb'
     });
     renderClickableWords(words, text || '');
-    bubble.appendChild(header);
     bubble.appendChild(words);
     row.appendChild(bubble);
     
@@ -1165,6 +1159,8 @@
         // Stop recording
         stopAudioRecording();
         resetMicButton();
+        input.disabled = false;
+        input.placeholder = 'Type your answer…';
         return;
       }
       
@@ -1189,6 +1185,9 @@
       if (!success) {
         resetMicButton();
         micBtn.title = 'Failed to start audio recording. Please check microphone permissions.';
+      } else {
+        input.disabled = true;
+        input.placeholder = 'Recording audio...';
       }
     });
 
@@ -1204,7 +1203,7 @@
       scrollToBottom(isImageQuestion ? targetEl.parentElement : targetEl);
       
       // Show "Thinking..." state on the ask button
-      setActionButtonsDisabled(true);
+      setActionButtonsDisabled(true, ['Evaluating...', 'Checking...', 'Almost there...']);
       const askBtn = popupEl ? popupEl.querySelector(`.${EXT_CLS_PREFIX}-btn-ask`) : null;
       if (askBtn) {
         askBtn.textContent = 'Thinking…';
@@ -1248,27 +1247,24 @@
             }
         }
 
-        const onEval = (e) => {
+        const onEval = async (e) => {
           try {
             if (!e || !e.detail || e.detail.id !== requestId) return;
             window.removeEventListener('weblang-eval-result', onEval, true);
             const result = (e.detail && e.detail.ok && e.detail.result) ? e.detail.result : (e.detail && e.detail.error ? e.detail.error : 'No evaluation.');
             
-            // Add evaluation directly below the answer
-            const evaluation = createElement('div', '', {
-              fontSize: '12px',
-              color: 'rgba(229,231,235,0.85)',
-              margin: '4px 0 0 0',
-              textAlign: 'right',
-              fontStyle: 'italic'
-            });
-            evaluation.textContent = result;
-            answerContainer.appendChild(evaluation);
+            const translatedResult = await translateQuestionToLearningLanguage(result);
+
+            const inputContainer = targetEl.querySelector(`.${EXT_CLS_PREFIX}-input-container`);
+            renderQuestionClickableBlock(targetEl, translatedResult, inputContainer);
             
+            const isImageQuestion = targetEl.classList.contains(`${EXT_CLS_PREFIX}-image-question-container`);
+            scrollToBottom(isImageQuestion ? targetEl.parentElement : targetEl);
+
             // Re-enable ask button for follow-up questions
             setActionButtonsDisabled(false);
             if (askBtn) {
-              askBtn.textContent = 'Ask me a question';
+              askBtn.textContent = 'Ask a follow-up';
             }
             
             // Update input visibility based on conversation state
@@ -1365,6 +1361,9 @@
       };
       window.addEventListener('weblang-prompt-result', onResult, true);
       try {
+        if (!chrome.runtime?.id) {
+          return reject(new Error("Extension context invalidated. Please reload the page."));
+        }
         chrome.runtime && chrome.runtime.sendMessage({ 
           type: 'WEBLANG_PROMPT_REQUEST', 
           id: requestId, 
@@ -1396,9 +1395,10 @@
 
     const btnAsk = createButton('Ask me a question', 'primary');
     btnAsk.classList.add(`${EXT_CLS_PREFIX}-btn-ask`);
+    
     btnAsk.addEventListener('click', async () => {
       try {
-        setActionButtonsDisabled(true); btnAsk.textContent = 'Asking…';
+        setActionButtonsDisabled(true, ['Reading...', 'Thinking...', 'Formulating question...']);
         if (context === 'image-popup') {
           const img = popupEl ? popupEl.querySelector('img') : null;
           if (img && popupBodyRef) {
@@ -1524,7 +1524,8 @@
 
         throw e;
       } finally {
-        setActionButtonsDisabled(false); btnAsk.textContent = 'Ask me a question';
+        setActionButtonsDisabled(false); 
+        btnAsk.textContent = 'Ask another question';
       }
     });
 
@@ -1547,29 +1548,57 @@
     return bar;
   }
 
-  function setActionButtonsDisabled(disabled) {
+  let loadingIntervalId = null;
+  function setActionButtonsDisabled(disabled, loadingTexts = []) {
     try {
       if (!popupEl) return;
-      const ask = popupEl.querySelector(`.${EXT_CLS_PREFIX}-btn-ask`);
-      if (ask) {
-        ask.disabled = !!disabled;
+      const askBtn = popupEl.querySelector(`.${EXT_CLS_PREFIX}-btn-ask`);
+
+      if (askBtn) {
+        askBtn.disabled = !!disabled;
+
         if (disabled) {
-          ask.style.position = 'relative';
-          ask.style.overflow = 'hidden';
-          ask.style.background = 'linear-gradient(45deg, #2563eb, #3b82f6, #60a5fa, #93c5fd)';
-          ask.style.backgroundSize = '400% 400%';
-          ask.style.animation = 'weblang-gradient-spin 1.5s ease-in-out infinite';
-          ask.style.border = '2px solid transparent';
-          ask.style.backgroundClip = 'padding-box';
-          // Add the spinning border effect
-          ask.style.boxShadow = '0 0 0 2px #2563eb, 0 0 0 4px rgba(37, 99, 235, 0.3)';
+          askBtn.innerHTML = ''; // Clear button for spinner
+
+          const spinner = createElement('div', `${EXT_CLS_PREFIX}-spinner`);
+          askBtn.appendChild(spinner);
+          
+          const textSpan = createElement('span');
+          askBtn.appendChild(textSpan);
+
+          if (loadingTexts.length > 0) {
+            let currentIndex = 0;
+            textSpan.textContent = loadingTexts[currentIndex];
+            loadingIntervalId = setInterval(() => {
+              currentIndex = (currentIndex + 1) % loadingTexts.length;
+              textSpan.textContent = loadingTexts[currentIndex];
+            }, 1500);
+          } else {
+            textSpan.textContent = 'Loading...';
+          }
+          
+          askBtn.style.position = 'relative';
+          askBtn.style.overflow = 'hidden';
+          askBtn.style.background = 'linear-gradient(45deg, #2563eb, #3b82f6, #60a5fa, #93c5fd)';
+          askBtn.style.backgroundSize = '400% 400%';
+          askBtn.style.animation = 'weblang-gradient-spin 1.5s ease-in-out infinite';
+          askBtn.style.border = '2px solid transparent';
+          askBtn.style.backgroundClip = 'padding-box';
+          askBtn.style.boxShadow = '0 0 0 2px #2563eb, 0 0 0 4px rgba(37, 99, 235, 0.3)';
         } else {
-          ask.style.background = '#2563eb';
-          ask.style.backgroundSize = '';
-          ask.style.animation = '';
-          ask.style.border = 'none';
-          ask.style.backgroundClip = '';
-          ask.style.boxShadow = '';
+          if (loadingIntervalId) {
+            clearInterval(loadingIntervalId);
+            loadingIntervalId = null;
+          }
+          askBtn.style.background = askBtn.classList.contains('primary') ? '#2563eb' : 'rgba(31,41,55,0.7)';
+          askBtn.style.backgroundSize = '';
+          askBtn.style.animation = '';
+          askBtn.style.border = 'none';
+          if (askBtn.classList.contains('secondary')) {
+             askBtn.style.border = '1px solid rgba(75,85,99,0.8)';
+          }
+          askBtn.style.backgroundClip = '';
+          askBtn.style.boxShadow = '';
         }
       }
     } catch {}
@@ -1710,48 +1739,53 @@
     const styleId = `${EXT_CLS_PREFIX}-styles`;
     if (document.getElementById(styleId)) return;
  
-    const styles = {
-      [`.${EXT_CLS_PREFIX}-clickable`]: {
-        'cursor': 'pointer',
-        'position': 'relative',
-        'transition': 'background-color 0.15s ease, border-color 0.15s ease',
-        'border-radius': '8px',
-        'padding': '4px',
-        'border': '2px solid transparent',
-      },
-      [`.${EXT_CLS_PREFIX}-clickable:hover`]: {
-        'background-color': 'rgba(59,130,246,0.08)',
-        'border-color': 'rgba(59,130,246,0.5)',
-      },
-      [`.${EXT_CLS_PREFIX}-selected`]: {
-        'background-color': 'rgba(59,130,246,0.12) !important',
-        'box-shadow': 'inset 3px 0 0 rgba(59,130,246,0.7)',
-      },
-      [`#${EXT_CLS_PREFIX}-tooltip`]: {
-        'position': 'fixed',
-        'display': 'none',
-        'padding': '4px 8px',
-        'background': 'rgba(0,0,0,0.8)',
-        'color': 'white',
-        'border-radius': '4px',
-        'font-size': '14px',
-        'font-family': 'sans-serif',
-        'z-index': '2147483647',
-        'pointer-events': 'none',
-        'white-space': 'nowrap',
-      },
-    };
- 
-    function stylesToString(styles) {
-      return Object.entries(styles).map(([selector, rules]) => {
-        const rulesString = Object.entries(rules).map(([property, value]) => `${property}: ${value};`).join(' ');
-        return `${selector} { ${rulesString} }`;
-      }).join(' ');
-    }
-    
     const style = createElement('style');
     style.id = styleId;
-    style.textContent = stylesToString(styles);
+    style.textContent = `
+      .${EXT_CLS_PREFIX}-clickable {
+        cursor: pointer;
+        position: relative;
+        transition: background-color 0.15s ease, border-color 0.15s ease;
+        border-radius: 8px;
+        padding: 4px;
+        border: 2px solid transparent;
+      }
+      .${EXT_CLS_PREFIX}-clickable:hover {
+        background-color: rgba(59,130,246,0.08);
+        border-color: rgba(59,130,246,0.5);
+      }
+      .${EXT_CLS_PREFIX}-selected {
+        background-color: rgba(59,130,246,0.12) !important;
+        box-shadow: inset 3px 0 0 rgba(59,130,246,0.7);
+      }
+      #${EXT_CLS_PREFIX}-tooltip {
+        position: fixed;
+        display: none;
+        padding: 4px 8px;
+        background: rgba(0,0,0,0.8);
+        color: white;
+        border-radius: 4px;
+        font-size: 14px;
+        font-family: sans-serif;
+        z-index: 2147483647;
+        pointer-events: none;
+        white-space: nowrap;
+      }
+      .${EXT_CLS_PREFIX}-spinner {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255, 255, 255, 0.4);
+        border-radius: 50%;
+        border-top-color: #fff;
+        animation: weblang-spinner-anim 0.8s linear infinite;
+        margin-right: 8px;
+        vertical-align: -2px;
+      }
+      @keyframes weblang-spinner-anim {
+        to { transform: rotate(360deg); }
+      }
+    `;
     document.head.appendChild(style);
   };
 
@@ -2040,14 +2074,23 @@
     
     // Handle image fetch results from service worker
     if (message.type === 'WEBLANG_IMAGE_FETCH_RESULT') {
-      const { id, ok, result, error } = message;
+      const { id, ok, result, error, mimeType } = message;
       window.dispatchEvent(new CustomEvent('weblang-image-fetch-result', { 
-        detail: { id, ok, result, error } 
+        detail: { id, ok, result, error, mimeType } 
       }));
     }
 
     if (message.type === 'TRANSLATION_PROGRESS' && progressCallbacks.has(message.requestId)) {
       progressCallbacks.get(message.requestId)(message.message);
+    }
+  });
+
+  window.addEventListener('message', (event) => {
+    if (event.source === window && event.data?.type === 'WEBLANG_PROMPT_RESULT') {
+      const { id, ok, result, error } = event.data;
+      window.dispatchEvent(new CustomEvent('weblang-prompt-result', { 
+        detail: { id, ok, result, error } 
+      }));
     }
   });
 
