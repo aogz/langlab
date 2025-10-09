@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "description": "Select words on any page, highlight like LangLab, and translate client-side.",
   "action": {
-    "default_title": "LangLab Selector & Translator"
+    "default_title": "LangLab Selector & Translator",
+    "default_popup": "popup.html"
   },
   "permissions": [
     "activeTab",

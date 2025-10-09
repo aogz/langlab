@@ -23,48 +23,34 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 // Handle extension icon click to open sidebar
 chrome.action.onClicked.addListener(async (tab) => {
   try {
-    console.log('Extension icon clicked, opening sidebar for tab:', tab.id);
     await chrome.sidePanel.open({ tabId: tab.id });
-    console.log('Sidebar opened successfully');
   } catch (error) {
-    console.error('Failed to open sidebar:', error);
-    // Fallback: try to open without tabId
-    try {
-      await chrome.sidePanel.open();
-      console.log('Sidebar opened without tabId');
-    } catch (fallbackError) {
-      console.error('Fallback sidebar open also failed:', fallbackError);
-    }
+    console.error(`Failed to open side panel on action click: ${error}`);
   }
 });
 
-import { saveWordsToSidebar } from './utils.js';
+import { saveWordsToSidebar, getDomainFromUrl } from './utils.js';
 
 const translatorCache = new Map(); // key: `${source}-${target}` -> Promise<Translator>
 let languageDetectorPromise = null;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || !sender) return;
-  
-  if (message.type === 'OPEN_SIDEBAR') {
-    const tabId = sender.tab && sender.tab.id;
-    if (!tabId) {
-      sendResponse({ success: false, error: 'No tab ID' });
-      return;
-    }
-    
-    // Open the sidebar for the current tab
-    chrome.sidePanel.open({ tabId: tabId })
-      .then(() => {
-        sendResponse({ success: true });
-      })
-      .catch((error) => {
-        console.error('Failed to open sidebar:', error);
-        sendResponse({ success: false, error: error.message });
-      });
-    return true; // Keep the message channel open for async response
+
+  if (message.type === 'OPEN_SIDEBAR_REQUEST') {
+    // This is triggered by a user click in the content script
+    (async () => {
+      if (sender.tab && sender.tab.id) {
+        try {
+          await chrome.sidePanel.open({ tabId: sender.tab.id });
+        } catch (e) {
+          console.error(`Failed to open side panel for tab ${sender.tab.id}:`, e);
+        }
+      }
+    })();
+    return;
   }
-  
+
   if (message.type === 'WEBLANG_PROMPT_REQUEST') {
     const tabId = sender.tab && sender.tab.id;
     if (!tabId) return;
@@ -314,15 +300,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-function getDomainFromUrl(url) {
-  try {
-    const urlObj = new URL(url);
-    return urlObj.hostname;
-  } catch {
-    return url;
-  }
-}
-
 async function getTranslator(sourceLanguage, targetLanguage, tabId, requestId) {
   if (!('Translator' in self)) return null;
   const key = `${sourceLanguage}-${targetLanguage}`;
@@ -504,6 +481,12 @@ async function saveWordToVocab(selectedWord, translationText, url, title, detect
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url && tab.url.startsWith('http')) {
+    const { ignoreList = [] } = await chrome.storage.local.get('ignoreList');
+    const domain = getDomainFromUrl(tab.url);
+    if (domain && ignoreList.includes(domain)) {
+      return;
+    }
+
     const data = await chrome.storage.local.get('weblangLearnLang');
     const learningLang = data.weblangLearnLang;
 

@@ -1535,17 +1535,9 @@
     btnVocab.classList.add(`${EXT_CLS_PREFIX}-btn-vocab`);
     btnVocab.addEventListener('click', async () => {
       try {
-        // Open the sidebar
-        await chrome.runtime.sendMessage({ type: 'OPEN_SIDEBAR' });
-        
+        await chrome.runtime.sendMessage({ type: 'OPEN_SIDEBAR_REQUEST' });
       } catch (error) {
         console.error('Failed to open sidebar:', error);
-        // Fallback: try to open sidebar directly
-        try {
-          await chrome.sidePanel.open();
-        } catch (fallbackError) {
-          console.error('Fallback sidebar open also failed:', fallbackError);
-        }
       }
     });
 
