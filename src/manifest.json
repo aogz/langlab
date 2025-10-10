@@ -21,7 +21,7 @@
     "type": "module"
   },
   "options_ui": {
-    "page": "options.html",
+    "page": "setup.html",
     "open_in_tab": true
   },
   "side_panel": {

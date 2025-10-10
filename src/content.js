@@ -224,6 +224,39 @@
     popupBodyRef = null;
   }
 
+  function closePopupWithAnimation() {
+    if (!popupEl) return;
+
+    const popupToClose = popupEl;
+    const backdropToClose = backdropEl;
+
+    // Clear global references immediately so no new actions can be taken on the closing popup
+    popupEl = null;
+    backdropEl = null;
+    popupBodyRef = null;
+
+    // Animate out
+    popupToClose.style.opacity = '0';
+    if (popupToClose.className.includes(`${EXT_CLS_PREFIX}-overlay`)) {
+      popupToClose.style.transform = 'translateY(15px)';
+    } else {
+      popupToClose.style.transform = 'translate(-50%, -50%) translateY(15px)';
+    }
+
+    if (backdropToClose) {
+      backdropToClose.style.opacity = '0';
+      backdropToClose.style.transition = 'opacity 0.25s ease-out';
+    }
+
+    // Remove from DOM after animation
+    setTimeout(() => {
+      if (popupToClose.parentNode) popupToClose.parentNode.removeChild(popupToClose);
+      if (backdropToClose && backdropToClose.parentNode) backdropToClose.parentNode.removeChild(backdropToClose);
+    }, 250); // This should match transition duration
+
+    resetSelectionState();
+  }
+
   function ensureBackdrop() {
     const container = ensureContainer();
     if (backdropEl && container.contains(backdropEl)) return backdropEl;
@@ -267,6 +300,20 @@
       boxShadow: '0 12px 24px rgba(0,0,0,0.75)',
       zIndex: '2147483647'
     });
+
+    const closeBtn = createElement('button', '', {
+      position: 'absolute',
+      top: '8px',
+      right: '8px',
+      background: 'transparent',
+      border: 'none',
+      color: '#9ca3af',
+      cursor: 'pointer',
+      padding: '4px'
+    });
+    closeBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+    closeBtn.onclick = () => clearTip();
+    tipEl.appendChild(closeBtn);
 
     // Use global selectedWords state
     const selectedWord = selectedWords.join(' ') || '';
@@ -1657,6 +1704,21 @@
     
     addDragHandlersToPopup(popupEl);
 
+    const closeBtn = createElement('button', '', {
+      position: 'absolute',
+      top: '12px',
+      right: '12px',
+      background: 'transparent',
+      border: 'none',
+      color: '#9ca3af',
+      cursor: 'pointer',
+      padding: '4px',
+      zIndex: '10'
+    });
+    closeBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+    closeBtn.onclick = () => closePopupWithAnimation();
+    popupEl.appendChild(closeBtn);
+
     const body = createElement('div', '', {
       fontSize: '18px',
       color: '#e5e7eb',
@@ -1701,13 +1763,29 @@
 
     addDragHandlersToPopup(popupEl);
 
+    const closeBtn = createElement('button', '', {
+      position: 'absolute',
+      top: '12px',
+      right: '12px',
+      background: 'transparent',
+      border: 'none',
+      color: '#9ca3af',
+      cursor: 'pointer',
+      padding: '4px',
+      zIndex: '10'
+    });
+    closeBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+    closeBtn.onclick = () => closePopupWithAnimation();
+    popupEl.appendChild(closeBtn);
+
     const wordsContainer = createElement('div', '', {
       lineHeight: '1.8',
       fontSize: '19px',
       color: '#e5e7eb',
       marginBottom: '8px',
       'overflow-y': 'auto',
-      'flex-shrink': '0'
+      'flex-shrink': '0',
+      paddingTop: '20px'
     });
 
     renderClickableWords(wordsContainer, text);
@@ -2074,12 +2152,7 @@
 
     // Close popup only when clicking outside both
     if (!insidePopup && !insideTip) {
-      clearPopup();
-      resetSelectionState();
-      if (activeParagraphEl) {
-        try { activeParagraphEl.classList.add(`${EXT_CLS_PREFIX}-clickable`); } catch {}
-        activeParagraphEl = null;
-      }
+      closePopupWithAnimation();
     }
   }
 
