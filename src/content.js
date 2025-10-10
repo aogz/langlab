@@ -1670,6 +1670,16 @@
     popupEl.appendChild(body);
     container.appendChild(popupEl);
 
+    // Animate popup
+    popupEl.style.opacity = '0';
+    popupEl.style.transform = `${position.transform} translateY(15px)`;
+    popupEl.style.transition = 'opacity 0.25s ease-out, transform 0.25s ease-out';
+
+    requestAnimationFrame(() => {
+      popupEl.style.opacity = '1';
+      popupEl.style.transform = position.transform;
+    });
+
     return { bodyEl: body };
   }
 
@@ -1717,6 +1727,16 @@
     popupEl.appendChild(controlsBar);
 
     container.appendChild(popupEl);
+
+    // Animate popup
+    popupEl.style.opacity = '0';
+    popupEl.style.transform = 'translateY(15px)';
+    popupEl.style.transition = 'opacity 0.25s ease-out, transform 0.25s ease-out';
+    
+    requestAnimationFrame(() => {
+      popupEl.style.opacity = '1';
+      popupEl.style.transform = 'translateY(0)';
+    });
 
     // Manage paragraph styles while overlay is open
     if (sourceParagraphEl) {
@@ -1810,7 +1830,7 @@
   function hasSubstantialText(element) {
     const text = element.textContent || element.innerText || '';
     const cleanText = text.trim();
-    if (cleanText.length < 50) return false;
+    if (cleanText.length < 20) return false;
     const sentences = cleanText.split(/[.!?]+/).filter((s) => s.trim().length > 0);
     return sentences.length >= 2;
   }
