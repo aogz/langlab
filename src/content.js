@@ -1908,7 +1908,7 @@
   function hasSubstantialText(element) {
     const text = element.textContent || element.innerText || '';
     const cleanText = text.trim();
-    if (cleanText.length < 50) return false;
+    if (cleanText.length < 36) return false;
     // We can also check that it's not just a giant navigation block or something similar
     if (element.querySelectorAll('a').length > 5 && cleanText.length / element.querySelectorAll('a').length < 30) {
       return false;
