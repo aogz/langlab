@@ -27,7 +27,6 @@
   let popupContentEl = null;
   let dragListenersAttached = false;
   let currentDetectedLanguage = 'unknown';
-
   const progressCallbacks = new Map();
 
   const tooltip = createElement('div', `${EXT_CLS_PREFIX}-tooltip`, {}, { id: `${EXT_CLS_PREFIX}-tooltip`, innerText: '🧪 Click to learn in LangLab' });
@@ -390,55 +389,6 @@
 
   // ========== TRANSLATION DISPLAY ==========
 
-  function showLoadingIndicator(container, message, includeAnimation = true) {
-    if (!container) return;
-    container.innerHTML = '';
-    
-    if (includeAnimation) {
-      const card = createElement('div', '', {
-        border: '1px solid rgba(75,85,99,0.9)',
-        background: 'rgba(17,24,39,0.9)',
-        borderRadius: '12px',
-        padding: '12px 14px',
-        boxShadow: '0 8px 22px rgba(0,0,0,0.30)'
-      });
-
-      const wrapper = createElement('div', '', {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px'
-      });
-      
-      const dot = createElement('div', '', {
-        width: '10px',
-        height: '10px',
-        borderRadius: '9999px',
-        background: '#60a5fa',
-        opacity: '0.9'
-      });
-      
-      const textEl = createElement('div', '', {
-        fontSize: '18px',
-        lineHeight: '1.7',
-        color: '#f3f4f6',
-        fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif'
-      });
-      textEl.textContent = message || 'Translating…';
-      
-      wrapper.appendChild(dot);
-      wrapper.appendChild(textEl);
-      card.appendChild(wrapper)
-      container.appendChild(card);
-    } else {
-      const wrap = createElement('div', '', {
-        fontSize: '16px',
-        color: '#e5e7eb'
-      });
-      wrap.textContent = message || 'Translating…';
-      container.appendChild(wrap);
-    }
-  }
-
   function showTranslationResult(container, resultText) {
     if (!container) return;
     container.innerHTML = '';
@@ -467,14 +417,6 @@
     }
 
     container.appendChild(card);
-  }
-
-  function setOverlayTranslationLoading(message) {
-    showLoadingIndicator(translationBodyEl, message, true);
-  }
-
-  function setPopupTranslationLoading(bodyEl, message) {
-    showLoadingIndicator(bodyEl, message, true);
   }
 
   function setPopupTranslationResult(bodyEl, resultText) {
@@ -814,7 +756,7 @@
           window.removeEventListener('weblang-image-result', onResult, true);
           showTranslationResult(container, 'Timeout: Request took too long');
           reject(new Error('Image question generation timeout'));
-        }, 30000);
+        }, 60000);
         
         window.addEventListener('weblang-image-result', onResult, true);
         
@@ -1260,7 +1202,7 @@
       scrollToBottom(isImageQuestion ? targetEl.parentElement : targetEl);
       
       // Show "Thinking..." state on the ask button
-      setActionButtonsDisabled(true, ['Evaluating...', 'Checking...', 'Almost there...']);
+      setControlsLoadingState(true, ['Evaluating...', 'Checking...', 'Almost there...']);
       const askBtn = popupEl ? popupEl.querySelector(`.${EXT_CLS_PREFIX}-btn-ask`) : null;
       if (askBtn) {
         askBtn.textContent = 'Thinking…';
@@ -1319,7 +1261,7 @@
             scrollToBottom(isImageQuestion ? targetEl.parentElement : targetEl);
 
             // Re-enable ask button for follow-up questions
-            setActionButtonsDisabled(false);
+            setControlsLoadingState(false);
             if (askBtn) {
               askBtn.textContent = 'Ask a follow-up';
             }
@@ -1336,7 +1278,7 @@
         chrome.runtime && chrome.runtime.sendMessage({ type: 'WEBLANG_EVAL_REQUEST', id: requestId, question: questionText, answer: txt, context: contextText, history: conversationHistory });
       } catch {
         // Re-enable ask button on error
-        setActionButtonsDisabled(false);
+        setControlsLoadingState(false);
         if (askBtn) {
           askBtn.textContent = 'Ask me a question';
         }
@@ -1446,25 +1388,41 @@
       marginTop: '10px'
     });
 
-    const centerWrap = createElement('div', '', {
+    const mainControlsContainer = createElement('div', '', {
+      position: 'relative',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      minHeight: '36px'
+    });
+
+    const centerWrap = createElement('div', `${EXT_CLS_PREFIX}-action-buttons`, {
       display: 'flex',
       justifyContent: 'center',
       gap: '8px'
     });
+
+    const loadingIndicator = createElement('div', `${EXT_CLS_PREFIX}-loading-indicator`, {
+      display: 'none',
+      alignItems: 'center',
+      gap: '8px',
+      fontSize: '14px',
+      color: '#d1d5db'
+    });
+    const spinner = createElement('div', `${EXT_CLS_PREFIX}-spinner`);
+    const loadingTextSpan = createElement('span');
+    loadingIndicator.appendChild(spinner);
+    loadingIndicator.appendChild(loadingTextSpan);
 
     const btnAsk = createButton('Ask me a question', 'primary');
     btnAsk.classList.add(`${EXT_CLS_PREFIX}-btn-ask`);
     
     btnAsk.addEventListener('click', async () => {
       try {
-        setActionButtonsDisabled(true, ['Reading...', 'Thinking...', 'Formulating question...']);
+        setControlsLoadingState(true, ['Reading...', 'Thinking...', 'Formulating question...']);
         if (context === 'image-popup') {
           const img = popupEl ? popupEl.querySelector('img') : null;
           if (img && popupBodyRef) {
-            const hasExistingContent = popupBodyRef.querySelector(`.${EXT_CLS_PREFIX}-question-block`);
-            if (!hasExistingContent) {
-              showLoadingIndicator(popupBodyRef, 'Generating question…', true);
-            }
             await generateImageQuestion(img, popupBodyRef);
           }
         } else if (context === 'popup') {
@@ -1479,18 +1437,10 @@
               }));
               await generateFollowUp(selectedText, popupBodyRef, conversation);
             } else {
-              // First question
-              showLoadingIndicator(popupBodyRef, 'Generating question…', true);
               await generateInitialQuestion(selectedText, popupBodyRef);
             }
           }
         } else {
-          // If used inside overlay, render into translation area
-          const hasExistingContent = translationBodyEl.querySelector(`.${EXT_CLS_PREFIX}-question-block`);
-          if (!hasExistingContent) {
-            setOverlayTranslationLoading('Generating question…');
-          }
-          
           // Collect existing questions for context
           const existingQuestions = [];
           const conversationHistory = [];
@@ -1524,7 +1474,7 @@
           }
           
           const finalQ = await generateAndTranslateQuestion(selectedText, existingQuestions, conversationHistory);
-          // Append new question instead of replacing
+          const hasExistingContent = translationBodyEl.querySelector(`.${EXT_CLS_PREFIX}-question-block`);
           if (hasExistingContent) {
             // Insert question before the input container
             const inputContainer = translationBodyEl.querySelector(`.${EXT_CLS_PREFIX}-input-container`);
@@ -1544,16 +1494,18 @@
           translationBodyEl.textContent = 'Sorry, something went wrong.';
         }
       } finally {
-        setActionButtonsDisabled(false);
+        setControlsLoadingState(false);
       }
     });
+
+    centerWrap.appendChild(btnAsk);
 
     if (context !== 'image-popup') {
       const btnExplain = createButton('Explain grammar', 'secondary');
       btnExplain.classList.add(`${EXT_CLS_PREFIX}-btn-explain`);
       btnExplain.addEventListener('click', async () => {
         try {
-          setActionButtonsDisabled(true, ['Analyzing...', 'Checking grammar...', 'Explaining...']);
+          setControlsLoadingState(true, ['Analyzing...', 'Checking grammar...', 'Explaining...']);
           const { nativeLang } = await chrome.storage.local.get(['nativeLang']);
           const detectedLang = await detectLanguageCode(selectedText);
           const result = await askQuestionWithPromptAPI(selectedText, [], [], 'explain', { detectedLang, nativeLang });
@@ -1570,14 +1522,16 @@
             translationBodyEl.textContent = 'Sorry, something went wrong.';
           }
       } finally {
-        setActionButtonsDisabled(false); 
+        setControlsLoadingState(false); 
       }
     });
       centerWrap.appendChild(btnExplain);
     }
-
-    centerWrap.appendChild(btnAsk);
-    bar.appendChild(centerWrap);
+    
+    mainControlsContainer.appendChild(centerWrap);
+    mainControlsContainer.appendChild(loadingIndicator);
+    
+    bar.appendChild(mainControlsContainer);
 
     // Add View Vocabulary button to the right side
     const btnVocab = createButton('📚 Vocab', 'secondary');
@@ -1596,71 +1550,44 @@
   }
 
   let loadingIntervalId = null;
-  function setActionButtonsDisabled(disabled, loadingTexts = []) {
+  function setControlsLoadingState(disabled, loadingTexts = []) {
     try {
       if (!popupEl) return;
-      const askBtn = popupEl.querySelector(`.${EXT_CLS_PREFIX}-btn-ask`);
-      const explainBtn = popupEl.querySelector(`.${EXT_CLS_PREFIX}-btn-explain`);
-      const buttons = [askBtn, explainBtn].filter(btn => btn);
+      const buttonsContainer = popupEl.querySelector(`.${EXT_CLS_PREFIX}-action-buttons`);
+      const loadingIndicator = popupEl.querySelector(`.${EXT_CLS_PREFIX}-loading-indicator`);
 
-      buttons.forEach(btn => {
-        btn.disabled = !!disabled;
+      if (!buttonsContainer || !loadingIndicator) {
+        return;
+      }
 
-        if (disabled) {
-          btn.innerHTML = ''; // Clear button for spinner
-          const spinner = createElement('div', `${EXT_CLS_PREFIX}-spinner`);
-          btn.appendChild(spinner);
-          
-          const textSpan = createElement('span');
-          btn.appendChild(textSpan);
+      if (loadingIntervalId) {
+        clearInterval(loadingIntervalId);
+        loadingIntervalId = null;
+      }
 
+      if (disabled) {
+        buttonsContainer.style.display = 'none';
+        loadingIndicator.style.display = 'flex';
+        
+        const textSpan = loadingIndicator.querySelector('span');
+        if (textSpan) {
           if (loadingTexts.length > 0) {
             let currentIndex = 0;
             textSpan.textContent = loadingTexts[currentIndex];
-            // Only set one interval
-            if (!loadingIntervalId) {
             loadingIntervalId = setInterval(() => {
               currentIndex = (currentIndex + 1) % loadingTexts.length;
-                const currentText = loadingTexts[currentIndex];
-                buttons.forEach(b => {
-                  const span = b.querySelector('span');
-                  if (span) span.textContent = currentText;
-                });
+              textSpan.textContent = loadingTexts[currentIndex];
             }, 1500);
-            }
           } else {
             textSpan.textContent = 'Loading...';
           }
-          
-          btn.style.position = 'relative';
-          btn.style.overflow = 'hidden';
-          btn.style.background = 'linear-gradient(45deg, #2563eb, #3b82f6, #60a5fa, #93c5fd)';
-          btn.style.backgroundSize = '400% 400%';
-          btn.style.animation = 'weblang-gradient-spin 1.5s ease-in-out infinite';
-          btn.style.border = '2px solid transparent';
-          btn.style.backgroundClip = 'padding-box';
-          btn.style.boxShadow = '0 0 0 2px #2563eb, 0 0 0 4px rgba(37, 99, 235, 0.3)';
-        } else {
-          if (loadingIntervalId) {
-            clearInterval(loadingIntervalId);
-            loadingIntervalId = null;
-          }
-          btn.style.cssText = ''; // Clear inline styles
-
-          // Re-apply original styles
-          const styleType = btn.classList.contains('primary') ? 'primary' : 'secondary';
-          Object.assign(btn.style, BUTTON_STYLES[styleType]);
-          
-          // Restore original button text
-          if (btn.classList.contains(`${EXT_CLS_PREFIX}-btn-ask`)) {
-            btn.textContent = 'Ask me a question';
-          } else if (btn.classList.contains(`${EXT_CLS_PREFIX}-btn-explain`)) {
-            btn.textContent = 'Explain grammar';
-          }
         }
-      });
+      } else {
+        buttonsContainer.style.display = 'flex';
+        loadingIndicator.style.display = 'none';
+      }
     } catch (e) {
-      console.error('Error in setActionButtonsDisabled:', e);
+      console.error('Error in setControlsLoadingState:', e);
       if (loadingIntervalId) {
         clearInterval(loadingIntervalId);
         loadingIntervalId = null;
