@@ -9,14 +9,13 @@
   <div class="container">
     <h1 class="title">LangLab</h1>
     
-    <div class="form-group">
-      <label for="native-language">Native Language</label>
-      <select id="native-language"></select>
-    </div>
-    
-    <div class="form-group">
-      <label for="learning-language">Learning Language</label>
-      <select id="learning-language"></select>
+    <div id="setupStatus" class="setup-status" style="display: none;">
+      <div class="setup-info">
+        <div class="setup-languages">
+          <span id="setupNativeLang"></span> → <span id="setupLearningLang"></span>
+        </div>
+        <button id="setupChangeBtn" class="setup-change-btn" title="Change language settings">⚙️</button>
+      </div>
     </div>
     
     <div class="button-group">

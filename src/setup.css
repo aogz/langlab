@@ -430,3 +430,305 @@ body {
   font-size: 14px;
   color: #64748b;
 }
+
+.tutorial-container {
+  max-width: 600px;
+  margin: 2rem auto;
+  padding: 2rem;
+  background-color: #1e293b;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  color: #e5e7eb;
+}
+
+.tutorial-step {
+  display: none;
+}
+
+.tutorial-step.active {
+  display: block;
+}
+
+.tutorial-content h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #f3f4f6;
+}
+
+.tutorial-content p {
+  font-size: 1rem;
+  color: #9ca3af;
+  margin-bottom: 2rem;
+  line-height: 1.6;
+}
+
+.tutorial-animation {
+  position: relative;
+  height: 250px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mock-browser {
+  background: #0f172a;
+  border-radius: 6px;
+  height: 90%;
+  width: 90%;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.mock-browser::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 25px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+}
+
+.mock-browser::after {
+  content: '•••';
+  position: absolute;
+  top: 5px;
+  left: 10px;
+  color: #475569;
+  font-size: 12px;
+  letter-spacing: 4px;
+}
+
+.tutorial-nav {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2rem;
+  border-top: 1px solid #334155;
+  padding-top: 1.5rem;
+}
+
+.tutorial-nav .btn {
+  margin-left: 0.5rem;
+}
+
+.mock-page, .mock-popup, .mock-translation-tip, .mock-image, .mock-popup-chat, .mock-sidebar {
+  margin-top: 25px; /* Height of the mock browser bar */
+}
+
+/* Animations */
+.mock-page {
+  padding: 20px;
+  font-family: serif;
+  color: #cbd5e1;
+}
+.mock-paragraph {
+  margin-bottom: 10px;
+  padding: 5px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+.mock-cursor {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>');
+  background-size: contain;
+  animation: cursor-move 4s infinite ease-in-out;
+}
+@keyframes cursor-move {
+  /* Phase 1: Click paragraph */
+  0% { top: 20px; left: 100px; transform: scale(1); }
+  15% { top: 80px; left: 50px; transform: scale(1); } /* Move over paragraph */
+  20% { top: 80px; left: 50px; transform: scale(0.8); } /* "Click" down */
+  25% { top: 80px; left: 50px; transform: scale(1); } /* "Click" up */
+  
+  /* Phase 2: Select text */
+  50% { top: 85px; left: 140px; transform: scale(1); } /* Move to start of text */
+  70% { top: 85px; left: 240px; transform: scale(1); } /* Drag to end of text */
+  
+  100% { top: 20px; left: 100px; transform: scale(1); } /* Reset */
+}
+.anim-step1 #paragraph-anim-target {
+  animation: paragraph-click-effect 8s infinite ease-in-out;
+}
+@keyframes paragraph-click-effect {
+  0%, 40%, 100% {
+    border: 2px solid transparent;
+    background-color: transparent;
+  }
+  20%, 30% {
+    border: 2px solid rgba(59, 130, 246, 0.5);
+    background-color: rgba(59, 130, 246, 0.1);
+  }
+}
+.anim-step1 .text-selection-target {
+  position: relative;
+  background: linear-gradient(to right, rgba(59, 130, 246, 0.3), rgba(59, 130, 246, 0.3));
+  background-size: 0% 100%;
+  background-repeat: no-repeat;
+  animation: text-selection-effect 8s infinite ease-in-out;
+  background-position: left;
+}
+@keyframes text-selection-effect {
+  0%, 50%, 100% { background-size: 0% 100%; }
+  70%, 90% { background-size: 100% 100%; }
+}
+
+.anim-step1 .mock-popup {
+  position: absolute;
+  top: 110px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 200px;
+  padding: 10px;
+  background: #111827;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  color: #e5e7eb;
+  font-size: 12px;
+  opacity: 0;
+  animation: popup-appear-anim 8s infinite;
+}
+
+@keyframes popup-appear-anim {
+  0%, 75% { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  85%, 100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.mock-popup {
+  width: 90%;
+  padding: 15px;
+  border-radius: 8px;
+  background: #111827;
+  color: #e5e7eb;
+}
+.mock-popup-text span {
+  border-bottom: 1px dashed #6b7280;
+  cursor: pointer;
+}
+.mock-popup-text .highlight-word {
+  animation: highlight-word-anim 3s infinite;
+  border-radius: 3px;
+}
+@keyframes highlight-word-anim {
+  0%, 100% { background: transparent; }
+  50% { background: #2563eb; color: #fff; }
+}
+.mock-translation-tip {
+  margin-top: 15px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  animation: fade-in 3s infinite;
+}
+@keyframes fade-in {
+  0%, 40% { opacity: 0; }
+  60%, 100% { opacity: 1; }
+}
+
+.anim-step3 .mock-vocab-btn {
+  background: #2563eb; color: #fff; border: none; padding: 5px 10px; border-radius: 5px; margin-top: 10px; cursor: pointer;
+  animation: vocab-btn-anim 3s infinite steps(1);
+}
+@keyframes vocab-btn-anim {
+  0%, 80% { content: '📚 Add to Vocab'; }
+  81%, 100% { content: '✅ Added!'; background: #16a34a; }
+}
+
+.mock-image {
+  width: 200px;
+  height: 120px;
+  background: #475569;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background-image: url('https://source.unsplash.com/random/200x120');
+}
+.mock-image-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(17, 24, 39, 0.8);
+  color: #e5e7eb;
+  padding: 5px 8px;
+  font-size: 10px;
+  border-radius: 5px;
+  border: 1px solid #475569;
+  animation: fade-in 3s infinite;
+}
+
+.mock-popup-chat {
+  width: 90%;
+  padding: 15px;
+  border-radius: 8px;
+  background: #111827;
+  display: flex;
+  align-items: center;
+}
+.mock-chat-input {
+  flex-grow: 1;
+  padding: 10px;
+  background: #334155;
+  border-radius: 5px;
+  color: #9ca3af;
+}
+.mock-mic-btn {
+  width: 35px;
+  height: 35px;
+  margin-left: 10px;
+  background: #475569;
+  border-radius: 50%;
+  cursor: pointer;
+  animation: mic-anim 3s infinite;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>');
+  background-repeat: no-repeat;
+  background-position: center;
+}
+@keyframes mic-anim {
+  0%, 40%, 100% { background-color: #475569; }
+  50%, 80% { background-color: #ef4444; }
+}
+
+.mock-sidebar {
+  width: 200px;
+  height: 220px;
+  background: #0f172a;
+  padding: 15px;
+  border-radius: 8px;
+  text-align: left;
+}
+.mock-sidebar-header {
+  font-weight: 600;
+  margin-bottom: 15px;
+}
+.mock-sidebar-word {
+  background: #1e293b;
+  padding: 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+.mock-practice-btn {
+  width: 100%;
+  background: #22c55e;
+  color: #fff;
+  border: none;
+  padding: 10px;
+  border-radius: 5px;
+  margin-top: 15px;
+  cursor: pointer;
+  animation: practice-btn-anim 3s infinite ease-in-out;
+}
+@keyframes practice-btn-anim {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}

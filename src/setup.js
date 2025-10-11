@@ -173,17 +173,17 @@ import { languages, populateLanguageSelect, checkLanguagePairAvailability } from
     try {
       await saveSettings();
       
-      // Close the setup window
-      if (chrome.tabs) {
-        // If opened as a tab, close it
-        const currentTab = await chrome.tabs.getCurrent();
-        if (currentTab) {
-          chrome.tabs.remove(currentTab.id);
-        }
-      } else {
-        // If opened as a popup, close it
-        window.close();
+      // Hide setup and show tutorial
+      document.querySelector('.setup-container').style.display = 'none';
+      document.getElementById('tutorial').style.display = 'block';
+
+      // Set the learning language in the tutorial
+      const learningLanguageName = document.getElementById('tutorialLanguageName');
+      const learningSelect = document.getElementById('learningLanguage');
+      if (learningSelect.value) {
+        learningLanguageName.textContent = learningSelect.options[learningSelect.selectedIndex].text.split(' ')[1];
       }
+
     } catch (error) {
       console.error('Failed to save settings:', error);
       saveBtn.textContent = 'Start Learning';
@@ -216,6 +216,49 @@ import { languages, populateLanguageSelect, checkLanguagePairAvailability } from
     }
   }
 
+  function handleTutorialNavigation() {
+    const steps = Array.from(document.querySelectorAll('.tutorial-step'));
+    const nextBtn = document.getElementById('nextBtn');
+    const prevBtn = document.getElementById('prevBtn');
+    const finishBtn = document.getElementById('finishBtn');
+    let currentStep = 0;
+
+    const updateTutorialView = () => {
+      steps.forEach((step, index) => {
+        step.classList.toggle('active', index === currentStep);
+      });
+      prevBtn.disabled = currentStep === 0;
+      nextBtn.style.display = currentStep === steps.length - 1 ? 'none' : 'inline-block';
+      finishBtn.style.display = currentStep === steps.length - 1 ? 'inline-block' : 'none';
+    };
+
+    nextBtn.addEventListener('click', () => {
+      if (currentStep < steps.length - 1) {
+        currentStep++;
+        updateTutorialView();
+      }
+    });
+
+    prevBtn.addEventListener('click', () => {
+      if (currentStep > 0) {
+        currentStep--;
+        updateTutorialView();
+      }
+    });
+
+    finishBtn.addEventListener('click', async () => {
+      // Close the setup window
+      if (chrome.tabs) {
+        const currentTab = await chrome.tabs.getCurrent();
+        if (currentTab) {
+          chrome.tabs.remove(currentTab.id);
+        }
+      } else {
+        window.close();
+      }
+    });
+  }
+
   // Initialize the setup page
   async function init() {
     populateLanguageSelect(nativeSelect, 'Select your native language');
@@ -244,6 +287,8 @@ import { languages, populateLanguageSelect, checkLanguagePairAvailability } from
     // Add event listeners LAST, after initial state is set.
     setupForm.addEventListener('submit', handleSubmit);
     skipBtn.addEventListener('click', handleSkip);
+    
+    handleTutorialNavigation();
     
     // Update learning language options when native language changes
     nativeSelect.addEventListener('change', async () => {

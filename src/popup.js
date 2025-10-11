@@ -1,20 +1,23 @@
-import { populateLanguageSelect, getDomainFromUrl } from './utils.js';
+import { getDomainFromUrl } from './utils.js';
 
-const nativeLanguageSelect = document.getElementById('native-language');
-const learningLanguageSelect = document.getElementById('learning-language');
 const ignoreSiteButton = document.getElementById('ignore-site');
 const openSidebarButton = document.getElementById('open-sidebar');
-
-populateLanguageSelect(nativeLanguageSelect, 'Select Native Language');
-populateLanguageSelect(learningLanguageSelect, 'Select Learning Language');
+const setupStatus = document.getElementById('setupStatus');
+const setupNativeLang = document.getElementById('setupNativeLang');
+const setupLearningLang = document.getElementById('setupLearningLang');
+const setupChangeBtn = document.getElementById('setupChangeBtn');
 
 async function loadSettings() {
-  const result = await chrome.storage.local.get(['weblangUserLang', 'weblangLearnLang', 'ignoreList']);
-  if (result.weblangUserLang) {
-    nativeLanguageSelect.value = result.weblangUserLang;
-  }
-  if (result.weblangLearnLang) {
-    learningLanguageSelect.value = result.weblangLearnLang;
+  const result = await chrome.storage.local.get(['weblangUserLang', 'weblangLearnLang', 'ignoreList', 'weblangSetupCompleted']);
+  
+  if (result.weblangSetupCompleted && result.weblangUserLang && result.weblangLearnLang) {
+    setupStatus.style.display = 'block';
+    const nativeLangName = getLanguageName(result.weblangUserLang);
+    const learningLangName = getLanguageName(result.weblangLearnLang);
+    setupNativeLang.textContent = nativeLangName;
+    setupLearningLang.textContent = learningLangName;
+  } else {
+    setupStatus.style.display = 'none';
   }
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -29,13 +32,25 @@ async function loadSettings() {
   }
 }
 
-nativeLanguageSelect.addEventListener('change', () => {
-  chrome.storage.local.set({ weblangUserLang: nativeLanguageSelect.value });
-});
-
-learningLanguageSelect.addEventListener('change', () => {
-  chrome.storage.local.set({ weblangLearnLang: learningLanguageSelect.value });
-});
+function getLanguageName(code) {
+  const languageMap = {
+      'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian',
+      'pt': 'Portuguese', 'ru': 'Russian', 'ja': 'Japanese', 'ko': 'Korean', 'zh': 'Chinese',
+      'ar': 'Arabic', 'hi': 'Hindi', 'nl': 'Dutch', 'sv': 'Swedish', 'no': 'Norwegian',
+      'da': 'Danish', 'fi': 'Finnish', 'pl': 'Polish', 'cs': 'Czech', 'hu': 'Hungarian',
+      'ro': 'Romanian', 'bg': 'Bulgarian', 'hr': 'Croatian', 'sk': 'Slovak', 'sl': 'Slovenian',
+      'et': 'Estonian', 'lv': 'Latvian', 'lt': 'Lithuanian', 'el': 'Greek', 'tr': 'Turkish',
+      'he': 'Hebrew', 'th': 'Thai', 'vi': 'Vietnamese', 'id': 'Indonesian', 'ms': 'Malay',
+      'tl': 'Filipino', 'uk': 'Ukrainian', 'be': 'Belarusian', 'ka': 'Georgian', 'hy': 'Armenian',
+      'az': 'Azerbaijani', 'kk': 'Kazakh', 'ky': 'Kyrgyz', 'uz': 'Uzbek', 'mn': 'Mongolian',
+      'ne': 'Nepali', 'si': 'Sinhala', 'ta': 'Tamil', 'te': 'Telugu', 'ml': 'Malayalam',
+      'kn': 'Kannada', 'gu': 'Gujarati', 'pa': 'Punjabi', 'bn': 'Bengali', 'ur': 'Urdu',
+      'fa': 'Persian', 'ps': 'Pashto', 'sw': 'Swahili', 'am': 'Amharic', 'yo': 'Yoruba',
+      'ig': 'Igbo', 'ha': 'Hausa', 'zu': 'Zulu', 'af': 'Afrikaans', 'is': 'Icelandic',
+      'ga': 'Irish', 'cy': 'Welsh', 'mt': 'Maltese', 'eu': 'Basque', 'ca': 'Catalan', 'gl': 'Galician'
+  };
+  return languageMap[code] || code.toUpperCase();
+}
 
 ignoreSiteButton.addEventListener('click', async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -63,6 +78,10 @@ openSidebarButton.addEventListener('click', () => {
       chrome.sidePanel.open({ tabId: tabs[0].id });
     }
   });
+});
+
+setupChangeBtn.addEventListener('click', () => {
+  chrome.runtime.openOptionsPage();
 });
 
 document.addEventListener('DOMContentLoaded', loadSettings);
