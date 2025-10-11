@@ -1908,9 +1908,12 @@
   function hasSubstantialText(element) {
     const text = element.textContent || element.innerText || '';
     const cleanText = text.trim();
-    if (cleanText.length < 20) return false;
-    const sentences = cleanText.split(/[.!?]+/).filter((s) => s.trim().length > 0);
-    return sentences.length >= 2;
+    if (cleanText.length < 50) return false;
+    // We can also check that it's not just a giant navigation block or something similar
+    if (element.querySelectorAll('a').length > 5 && cleanText.length / element.querySelectorAll('a').length < 30) {
+      return false;
+    }
+    return true;
   }
 
   function isClickInsideInteractiveElement(target) {
@@ -1927,10 +1930,13 @@
     await openOverlayForElement(paragraph, paragraph);
   }
 
-  function makeClickableParagraphs() {
-    const paragraphs = document.querySelectorAll('p');
-    paragraphs.forEach((p) => {
-      if (clickableNodes.has(p)) return;
+  function makeElementsClickable() {
+    const blockElements = 'p, li, h1, h2, h3, h4, h5, h6, blockquote, dd, dt';
+    const leafDivs = 'div:not(:has(p, li, h1, h2, h3, h4, h5, h6, blockquote, dd, dt, div, section, article, header, footer, aside, nav, ul, ol, table))';
+    const elements = document.querySelectorAll(`${blockElements}, ${leafDivs}`);
+    
+    elements.forEach((p) => {
+      if (clickableNodes.has(p) || p.closest(`.${EXT_CLS_PREFIX}-clickable`)) return;
       if (!hasSubstantialText(p)) return;
       p.classList.add(`${EXT_CLS_PREFIX}-clickable`);
       p.addEventListener('click', handleParagraphClick, true);
@@ -2162,7 +2168,7 @@
       console.log('Language settings updated, re-evaluating paragraphs...');
       // Clear existing clickable nodes and re-evaluate
       clickableNodes.clear();
-      makeClickableParagraphs();
+      makeElementsClickable();
     }
     
     // Handle image fetch results from service worker
@@ -2189,10 +2195,10 @@
 
   // Initialize
   addClickableStyles();
-  makeClickableParagraphs();
+  makeElementsClickable();
   attachImageClickHandlers();
   const observer = new MutationObserver(() => {
-    makeClickableParagraphs();
+    makeElementsClickable();
     attachImageClickHandlers();
   });
   observer.observe(document.body, { childList: true, subtree: true });
