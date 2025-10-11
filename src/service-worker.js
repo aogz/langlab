@@ -54,7 +54,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'WEBLANG_PROMPT_REQUEST') {
     const tabId = sender.tab && sender.tab.id;
     if (!tabId) return;
-    const { id, text, mode, history, existingQuestions } = message;
+    const { id, text, mode, history, existingQuestions, params } = message;
     (async () => {
       try {
         await chrome.scripting.executeScript({
@@ -70,10 +70,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await chrome.scripting.executeScript({
           target: { tabId },
           world: 'MAIN',
-          func: (rid, payload, m, h, eq) => {
-            window.dispatchEvent(new CustomEvent('weblang-prompt-request', { detail: { id: rid, text: payload, mode: m || 'question', history: h, existingQuestions: eq } }));
+          func: (rid, payload, m, h, eq, p) => {
+            window.dispatchEvent(new CustomEvent('weblang-prompt-request', { detail: { id: rid, text: payload, mode: m, history: h, existingQuestions: eq, params: p } }));
           },
-          args: [id, text, mode || 'question', history, existingQuestions]
+          args: [id, text, mode, history, existingQuestions, params]
         });
       } catch (e) {
         

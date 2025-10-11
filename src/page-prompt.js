@@ -6,6 +6,7 @@
     const mode = detail.mode || 'question';
     const existingQuestions = detail.existingQuestions || [];
     const history = detail.history || [];
+    const params = detail.params || {};
     if (!id) return;
     try {
       if (!("LanguageModel" in window)) throw new Error('Prompt API not supported in this browser. See docs: https://developer.chrome.com/docs/ai/prompt-api');
@@ -16,7 +17,12 @@
       const session = await window.LanguageModel.create({
         outputLanguage: 'en'
       });
-      let prompt = window.WEBLANG_PROMPTS.question(text, existingQuestions, history);
+      let prompt;
+      if (mode === 'explain') {
+        prompt = window.WEBLANG_PROMPTS.explainGrammar(text, params.detectedLang, params.nativeLang);
+      } else {
+        prompt = window.WEBLANG_PROMPTS.question(text, existingQuestions, history);
+      }
       const result = await session.prompt(prompt);
       const out = (typeof result === 'string' && result.trim()) ? result.trim() : '';
       if (!out) throw new Error('Model returned an empty response.');

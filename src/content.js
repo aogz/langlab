@@ -8,6 +8,7 @@
   let selectionStartIndex = null;
   let wordOrder = [];
   let selectedWords = [];
+  let activeWordSelection = null;
   let popupEl = null;
   let textContainer = null;
   let translationBodyEl = null;
@@ -88,6 +89,15 @@
     btn.textContent = text;
     if (onClick) btn.addEventListener('click', onClick);
     return btn;
+  }
+
+  function renderSimpleMarkdown(text) {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/^\* (.*$)/gm, '<ul><li>$1</li></ul>')
+      .replace(/<\/ul>\n<ul>/g, '')
+      .replace(/\n/g, '<br>');
   }
 
   function animateVocabButton() {
@@ -1388,7 +1398,7 @@
   }
 
   // Prompt API (Gemini Nano) helper executed in the PAGE context (not content script)
-  async function askQuestionWithPromptAPI(selectedText, existingQuestions = [], conversationHistory = []) {
+  async function askQuestionWithPromptAPI(selectedText, existingQuestions = [], conversationHistory = [], mode = 'question', promptParams = {}) {
     const requestId = `weblang_prompt_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     return new Promise((resolve, reject) => {
       const onResult = (e) => {
@@ -1416,7 +1426,9 @@
           id: requestId, 
           text: String(selectedText||''),
           existingQuestions: existingQuestions,
-          history: conversationHistory
+          history: conversationHistory,
+          mode: mode,
+          params: promptParams
         });
       } catch (err) {
         window.removeEventListener('weblang-prompt-result', onResult, true);
@@ -1458,55 +1470,18 @@
         } else if (context === 'popup') {
           if (popupBodyRef) {
             // Check if this is the first question or a follow-up
-            const hasExistingContent = popupBodyRef.querySelector(`.${EXT_CLS_PREFIX}-question-block`);
-            if (!hasExistingContent) {
-              setPopupTranslationLoading(popupBodyRef, 'Generating question…');
-            }
-            
-            // Collect existing questions for context
-            const existingQuestions = [];
-            const conversationHistory = [];
-            const messageContainer = popupBodyRef;
-            if (messageContainer) {
-                const children = Array.from(messageContainer.children);
-                for (const child of children) {
-                    if (child.classList.contains(`${EXT_CLS_PREFIX}-question-block`)) {
-                        const questionText = (child.textContent || '').trim().replace(/^Question/, '').trim();
-                        if (questionText) {
-                            existingQuestions.push(questionText);
-                            conversationHistory.push({ role: 'assistant', content: questionText });
-                        }
-                    } else if (child.classList.contains(`${EXT_CLS_PREFIX}-answer-container`)) {
-                        const answerBubble = child.querySelector('div > div[style*="background: rgb(37, 99, 235)"]');
-                        if (answerBubble) {
-                            const answerText = answerBubble.textContent.trim();
-                            if (answerText) {
-                                conversationHistory.push({ role: 'user', content: answerText });
-                            }
-                        }
-                        const evaluationEl = child.querySelector('div[style*="font-style: italic"]');
-                        if (evaluationEl) {
-                            const evaluationText = evaluationEl.textContent.trim();
-                            if (evaluationText) {
-                                conversationHistory.push({ role: 'assistant', content: evaluationText });
-                            }
-                        }
-                    }
-                }
-            }
-            
-            const finalQ = await generateAndTranslateQuestion(selectedText, existingQuestions, conversationHistory);
-            if (popupBodyRef) {
-              // Insert question before the input container if it exists
-              const inputContainer = popupBodyRef.querySelector(`.${EXT_CLS_PREFIX}-input-container`);
-              const wordsEl = renderQuestionClickableBlock(popupBodyRef, finalQ, inputContainer);
-              popupWordsContainerEl = wordsEl;
-              // Only attach response controls if this is the first question
-              if (!hasExistingContent) {
-                attachResponseControls(popupBodyRef, currentDetectedLanguage);
-              }
-              // Update input visibility after adding question
-              updateInputVisibility(popupBodyRef);
+            const existingBlock = popupBodyRef.querySelector(`.${EXT_CLS_PREFIX}-question-block`);
+            if (existingBlock) {
+              // It's a follow-up, add to existing conversation
+              const conversation = Array.from(existingBlock.querySelectorAll('.conversation-turn')).map(turn => ({
+                role: turn.dataset.role,
+                content: turn.textContent
+              }));
+              await generateFollowUp(selectedText, popupBodyRef, conversation);
+            } else {
+              // First question
+              showLoadingIndicator(popupBodyRef, 'Generating question…', true);
+              await generateInitialQuestion(selectedText, popupBodyRef);
             }
           }
         } else {
@@ -1563,20 +1538,46 @@
           // Update input visibility after adding question
           updateInputVisibility(translationBodyEl);
         }
-      } catch (e) {
-        const msg = (e && e.message) ? e.message : 'Unable to generate a question.';
-        if (context === 'popup') {
-          if (popupBodyRef) setPopupTranslationResult(popupBodyRef, msg);
+      } catch (error) {
+        console.error('Error handling "Ask me a question" click:', error);
+        if (translationBodyEl) {
+          translationBodyEl.textContent = 'Sorry, something went wrong.';
         }
-
-        throw e;
       } finally {
-        setActionButtonsDisabled(false); 
-        btnAsk.textContent = 'Ask another question';
+        setActionButtonsDisabled(false);
       }
     });
 
+    if (context !== 'image-popup') {
+      const btnExplain = createButton('Explain grammar', 'secondary');
+      btnExplain.classList.add(`${EXT_CLS_PREFIX}-btn-explain`);
+      btnExplain.addEventListener('click', async () => {
+        try {
+          setActionButtonsDisabled(true, ['Analyzing...', 'Checking grammar...', 'Explaining...']);
+          const { nativeLang } = await chrome.storage.local.get(['nativeLang']);
+          const detectedLang = await detectLanguageCode(selectedText);
+          const result = await askQuestionWithPromptAPI(selectedText, [], [], 'explain', { detectedLang, nativeLang });
+
+          if (translationBodyEl) {
+            translationBodyEl.innerHTML = ''; // Clear previous content
+            const responseEl = createElement('p', '', { color: '#f8fafc', fontSize: '18px' });
+            responseEl.innerHTML = renderSimpleMarkdown(result);
+            translationBodyEl.appendChild(responseEl);
+          }
+        } catch (error) {
+          console.error('Error handling "Explain grammar" click:', error);
+          if (translationBodyEl) {
+            translationBodyEl.textContent = 'Sorry, something went wrong.';
+          }
+      } finally {
+        setActionButtonsDisabled(false); 
+      }
+    });
+      centerWrap.appendChild(btnExplain);
+    }
+
     centerWrap.appendChild(btnAsk);
+    bar.appendChild(centerWrap);
 
     // Add View Vocabulary button to the right side
     const btnVocab = createButton('📚 Vocab', 'secondary');
@@ -1590,7 +1591,6 @@
     });
 
     // Order: language button (left), center content, vocab button (right)
-    bar.appendChild(centerWrap);
     bar.appendChild(btnVocab);
     return bar;
   }
@@ -1600,55 +1600,72 @@
     try {
       if (!popupEl) return;
       const askBtn = popupEl.querySelector(`.${EXT_CLS_PREFIX}-btn-ask`);
+      const explainBtn = popupEl.querySelector(`.${EXT_CLS_PREFIX}-btn-explain`);
+      const buttons = [askBtn, explainBtn].filter(btn => btn);
 
-      if (askBtn) {
-        askBtn.disabled = !!disabled;
+      buttons.forEach(btn => {
+        btn.disabled = !!disabled;
 
         if (disabled) {
-          askBtn.innerHTML = ''; // Clear button for spinner
-
+          btn.innerHTML = ''; // Clear button for spinner
           const spinner = createElement('div', `${EXT_CLS_PREFIX}-spinner`);
-          askBtn.appendChild(spinner);
+          btn.appendChild(spinner);
           
           const textSpan = createElement('span');
-          askBtn.appendChild(textSpan);
+          btn.appendChild(textSpan);
 
           if (loadingTexts.length > 0) {
             let currentIndex = 0;
             textSpan.textContent = loadingTexts[currentIndex];
+            // Only set one interval
+            if (!loadingIntervalId) {
             loadingIntervalId = setInterval(() => {
               currentIndex = (currentIndex + 1) % loadingTexts.length;
-              textSpan.textContent = loadingTexts[currentIndex];
+                const currentText = loadingTexts[currentIndex];
+                buttons.forEach(b => {
+                  const span = b.querySelector('span');
+                  if (span) span.textContent = currentText;
+                });
             }, 1500);
+            }
           } else {
             textSpan.textContent = 'Loading...';
           }
           
-          askBtn.style.position = 'relative';
-          askBtn.style.overflow = 'hidden';
-          askBtn.style.background = 'linear-gradient(45deg, #2563eb, #3b82f6, #60a5fa, #93c5fd)';
-          askBtn.style.backgroundSize = '400% 400%';
-          askBtn.style.animation = 'weblang-gradient-spin 1.5s ease-in-out infinite';
-          askBtn.style.border = '2px solid transparent';
-          askBtn.style.backgroundClip = 'padding-box';
-          askBtn.style.boxShadow = '0 0 0 2px #2563eb, 0 0 0 4px rgba(37, 99, 235, 0.3)';
+          btn.style.position = 'relative';
+          btn.style.overflow = 'hidden';
+          btn.style.background = 'linear-gradient(45deg, #2563eb, #3b82f6, #60a5fa, #93c5fd)';
+          btn.style.backgroundSize = '400% 400%';
+          btn.style.animation = 'weblang-gradient-spin 1.5s ease-in-out infinite';
+          btn.style.border = '2px solid transparent';
+          btn.style.backgroundClip = 'padding-box';
+          btn.style.boxShadow = '0 0 0 2px #2563eb, 0 0 0 4px rgba(37, 99, 235, 0.3)';
         } else {
           if (loadingIntervalId) {
             clearInterval(loadingIntervalId);
             loadingIntervalId = null;
           }
-          askBtn.style.background = askBtn.classList.contains('primary') ? '#2563eb' : 'rgba(31,41,55,0.7)';
-          askBtn.style.backgroundSize = '';
-          askBtn.style.animation = '';
-          askBtn.style.border = 'none';
-          if (askBtn.classList.contains('secondary')) {
-             askBtn.style.border = '1px solid rgba(75,85,99,0.8)';
+          btn.style.cssText = ''; // Clear inline styles
+
+          // Re-apply original styles
+          const styleType = btn.classList.contains('primary') ? 'primary' : 'secondary';
+          Object.assign(btn.style, BUTTON_STYLES[styleType]);
+          
+          // Restore original button text
+          if (btn.classList.contains(`${EXT_CLS_PREFIX}-btn-ask`)) {
+            btn.textContent = 'Ask me a question';
+          } else if (btn.classList.contains(`${EXT_CLS_PREFIX}-btn-explain`)) {
+            btn.textContent = 'Explain grammar';
           }
-          askBtn.style.backgroundClip = '';
-          askBtn.style.boxShadow = '';
         }
+      });
+    } catch (e) {
+      console.error('Error in setActionButtonsDisabled:', e);
+      if (loadingIntervalId) {
+        clearInterval(loadingIntervalId);
+        loadingIntervalId = null;
       }
-    } catch {}
+    }
   }
 
   const POPUP_STYLES = {
@@ -2003,7 +2020,6 @@
   }
 
   function markSelected(spans) {
-    unmarkSelected();
     spans.forEach((span) => {
       span.classList.add(`${EXT_CLS_PREFIX}-word-selected`);
       span.style.background = '#2563eb';
@@ -2014,16 +2030,22 @@
   }
 
   function renderClickableWords(container, text) {
-    wordOrder = [];
-    selectionStartIndex = null;
-    isDragging = false;
+    const state = {
+      wordOrder: [],
+      selectionStartIndex: null,
+      isDragging: false,
+      selectedWords: [],
+      container: container
+    };
+
+    container.innerHTML = '';
 
     const parts = String(text || '').split(/(\s+)/);
     parts.forEach((part) => {
       if (part.trim() === '') {
         container.appendChild(document.createTextNode(part));
       } else {
-        const cleanWord = part.replace(/[^\p{L}\p{N}\s'-]/gu, '').trim();
+        const cleanWord = part.replace(/[^\p{L}\p{N}'-]/gu, '').trim();
         const span = createElement('span', `${EXT_CLS_PREFIX}-word`, {
           cursor: 'pointer',
           transition: 'color 150ms ease-in-out, background 150ms ease-in-out',
@@ -2033,31 +2055,36 @@
         });
         span.textContent = part;
 
-        const currentIndex = wordOrder.length;
+        const currentIndex = state.wordOrder.length;
         if (cleanWord) {
-          wordOrder.push({ word: cleanWord, span });
+          state.wordOrder.push({ word: cleanWord, span });
         }
 
         span.addEventListener('mousedown', (e) => {
           e.preventDefault();
           e.stopPropagation();
           if (!cleanWord) return;
-          isDragging = true;
-          selectedWords = [cleanWord];
-          selectionStartIndex = currentIndex;
+          
+          unmarkSelected();
+          
+          state.isDragging = true;
+          state.selectedWords = [cleanWord];
+          state.selectionStartIndex = currentIndex;
+          
           markSelected([span]);
+          activeWordSelection = state;
         });
 
         span.addEventListener('mouseenter', (e) => {
-          if (!isDragging || selectionStartIndex === null) return;
+          if (!state.isDragging || state.selectionStartIndex === null) return;
           e.preventDefault();
           e.stopPropagation();
-          const start = selectionStartIndex;
+          const start = state.selectionStartIndex;
           const end = currentIndex;
           const minIndex = Math.min(start, end);
           const maxIndex = Math.max(start, end);
-          const sequential = wordOrder.slice(minIndex, maxIndex + 1);
-          selectedWords = sequential.map((w) => w.word);
+          const sequential = state.wordOrder.slice(minIndex, maxIndex + 1);
+          state.selectedWords = sequential.map((w) => w.word);
           markSelected(sequential.map((w) => w.span));
         });
 
@@ -2069,11 +2096,15 @@
   // removed local translate; translation runs in service worker via translateTo
 
   function handleGlobalMouseUp() {
-    if (isDragging) {
-      isDragging = false;
+    if (activeWordSelection && activeWordSelection.isDragging) {
+      const state = activeWordSelection;
+      state.isDragging = false;
+  
+      // Update global selectedWords for other parts of the extension that rely on it
+      selectedWords = state.selectedWords;
+  
       if (selectedWords.length > 0) {
-        const scope = popupEl || document;
-        const spans = scope.querySelectorAll(`.${EXT_CLS_PREFIX}-word-selected`);
+        const spans = state.container.querySelectorAll(`.${EXT_CLS_PREFIX}-word-selected`);
         if (spans.length > 0) {
           const selectedText = selectedWords.join(' ');
           // Show translation in a separate floating tip below the selected sequence (do not replace overlay/popup)
@@ -2104,6 +2135,8 @@
           });
         }
       }
+      
+      activeWordSelection = null;
     }
   }
 

@@ -20,6 +20,10 @@ Based on the history, ask one new, different question in English about the follo
       }
     },
 
+    explainGrammar: (text, detectedLang, nativeLang) => {
+      return `Explain the grammar of the following ${detectedLang} text. Explain it to me as if I'm a beginner, but keep it concise. My native language is ${nativeLang}, please explain in ${nativeLang}. Use simple HTML tags for readability (only the following tags: <b>, <i>, <ul>, <li>). Do not use markdown. Do not use html and \`\`\` to wrap the tags. Text: "${text}"`;
+    },
+
     // For evaluating a student's answer
     evaluate: (context, question, answer, history) => {
       const historyText = (history && history.length > 0)
