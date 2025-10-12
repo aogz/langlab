@@ -1544,9 +1544,11 @@
     });
 
     const leftControls = createElement('div');
-    const btnNext = createButton('Next', 'secondary');
-    applyStyles(btnNext, { 
-      padding: '8px 12px',
+    const btnNext = createButton('', 'secondary');
+    applyStyles(btnNext, {
+      height: '36px',
+      boxSizing: 'border-box',
+      padding: '0 12px',
       display: 'flex',
       alignItems: 'center',
       gap: '6px'
@@ -2044,6 +2046,20 @@
     const text = element.textContent || element.innerText || '';
     const cleanText = text.trim();
     if (cleanText.length < 36) return false;
+
+    // Calculate link text density
+    const linkElements = element.querySelectorAll('a');
+    let linkTextLength = 0;
+    linkElements.forEach(link => {
+      linkTextLength += (link.textContent || '').trim().length;
+    });
+
+    // If more than 50% of the text is part of a link, don't make it interactive
+    if (linkTextLength / cleanText.length > 0.5) {
+      console.log('[LangLab] Skipping element due to high link density:', element);
+      return false;
+    }
+
     // We can also check that it's not just a giant navigation block or something similar
     if (element.querySelectorAll('a').length > 5 && cleanText.length / element.querySelectorAll('a').length < 30) {
       return false;
@@ -2405,4 +2421,89 @@
       }, 500);
     }
   }
+
+  function showStartLearningWidget() {
+    const existingWidget = document.getElementById(`${EXT_CLS_PREFIX}-start-learning-widget`);
+    if (existingWidget) return;
+
+    const widget = createElement('div', '', {
+      position: 'fixed',
+      bottom: '20px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      zIndex: '2147483646',
+      opacity: '0',
+      transition: 'opacity 0.5s ease-in-out'
+    }, { id: `${EXT_CLS_PREFIX}-start-learning-widget` });
+
+    const button = createButton('', 'primary');
+    button.innerHTML = '🚀 Start learning in LangLab';
+    applyStyles(button, {
+      boxShadow: '0 8px 20px rgba(0,0,0,0.25)',
+      height: '36px',
+      boxSizing: 'border-box',
+      padding: '0 16px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px'
+    });
+    
+    button.addEventListener('click', () => {
+      const firstLearnable = document.querySelector(`.${EXT_CLS_PREFIX}-clickable, .${EXT_CLS_PREFIX}-image-button-container`);
+      if (firstLearnable) {
+        firstLearnable.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => {
+          if (firstLearnable.classList.contains(`${EXT_CLS_PREFIX}-image-button-container`)) {
+            const btn = firstLearnable.querySelector('button');
+            if (btn) btn.click();
+          } else {
+            firstLearnable.click();
+          }
+          hideStartLearningWidget();
+        }, 500);
+      }
+    });
+
+    widget.appendChild(button);
+    document.body.appendChild(widget);
+
+    setTimeout(() => {
+      widget.style.opacity = '1';
+    }, 100);
+  }
+
+  function hideStartLearningWidget() {
+    const widget = document.getElementById(`${EXT_CLS_PREFIX}-start-learning-widget`);
+    if (widget) {
+      widget.style.opacity = '0';
+      setTimeout(() => {
+        if (widget.parentNode) {
+          widget.parentNode.removeChild(widget);
+        }
+      }, 500);
+    }
+  }
+
+  // Override the click handler to hide the widget on first interaction
+  const originalHandleParagraphClick = handleParagraphClick;
+  handleParagraphClick = function(...args) {
+    hideStartLearningWidget();
+    return originalHandleParagraphClick.apply(this, args);
+  };
+
+  const originalAskQuestionAboutImage = askQuestionAboutImage;
+  askQuestionAboutImage = function(...args) {
+    hideStartLearningWidget();
+    return originalAskQuestionAboutImage.apply(this, args);
+  };
+  
+  // Initialize and show the widget if learnable items are found
+  setTimeout(() => {
+    makeElementsClickable();
+    attachImageClickHandlers();
+    const learnableItems = document.querySelectorAll(`.${EXT_CLS_PREFIX}-clickable, .${EXT_CLS_PREFIX}-image-button-container`);
+    if (learnableItems.length > 0) {
+      showStartLearningWidget();
+    }
+  }, 500);
 })();
