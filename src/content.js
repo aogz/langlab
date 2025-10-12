@@ -21,6 +21,7 @@
   let popupWordsContainerEl = null;
   let overlayWordsContainerEl = null;
   let tipEl = null;
+  let activeLearnableEl = null;
   let isDraggingPopup = false;
   let dragOffsetX = 0;
   let dragOffsetY = 0;
@@ -266,6 +267,7 @@
     popupEl = null;
     backdropEl = null;
     popupBodyRef = null;
+    activeLearnableEl = null;
 
     // Animate out
     popupToClose.style.opacity = '0';
@@ -602,7 +604,7 @@
     button.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      askQuestionAboutImage(img);
+      askQuestionAboutImage(img, buttonContainer);
     });
     
     buttonContainer.appendChild(button);
@@ -634,7 +636,8 @@
   }
   
   
-  function askQuestionAboutImage(img) {
+  function askQuestionAboutImage(img, buttonContainer) {
+    activeLearnableEl = buttonContainer;
     // Use the same popup system as text questions
     openOverlayForImage(img);
   }
@@ -657,7 +660,11 @@
         return;
       }
       
-      const popup = createImagePopup(centeredPosition);
+      const topPosition = {
+        x: window.innerWidth / 2,
+        transform: 'translate(-50%, 0)'
+      };
+      const popup = createImagePopup(topPosition);
       
       // Clear any loading state
       popup.bodyEl.innerHTML = '';
@@ -1811,13 +1818,15 @@
     const imagePopupStyles = {
       ...POPUP_STYLES,
       left: `${position.x}px`,
-      top: `${position.y}px`,
       transform: position.transform,
       width: '480px',
       'max-height': '80vh',
       'display': 'flex',
       'flex-direction': 'column',
     };
+    if (position.y) {
+      imagePopupStyles.top = `${position.y}px`;
+    }
     popupEl = createElement('div', `${EXT_CLS_PREFIX}-popup`, imagePopupStyles);
     
     addDragHandlersToPopup(popupEl);
@@ -2045,7 +2054,7 @@
   function hasSubstantialText(element) {
     const text = element.textContent || element.innerText || '';
     const cleanText = text.trim();
-    if (cleanText.length < 36) return false;
+    if (cleanText.length < 50) return false;
 
     // Calculate link text density
     const linkElements = element.querySelectorAll('a');
@@ -2054,10 +2063,13 @@
       linkTextLength += (link.textContent || '').trim().length;
     });
 
-    // If more than 50% of the text is part of a link, don't make it interactive
-    if (linkTextLength / cleanText.length > 0.5) {
-      console.log('[LangLab] Skipping element due to high link density:', element);
-      return false;
+    if (linkTextLength > 0) {
+        const nonLinkTextLength = cleanText.length - linkTextLength;
+        // If the text is mostly links (e.g., a list of links, or one very long link)
+        if (linkTextLength / cleanText.length > 0.8 || nonLinkTextLength < 25) {
+            console.log('[LangLab] Skipping element due to high link density or low non-link text:', element);
+            return false;
+        }
     }
 
     // We can also check that it's not just a giant navigation block or something similar
@@ -2072,11 +2084,23 @@
     return !!target.closest('a, button, input, textarea, select, [role="button"], [role="link"], [contenteditable=""], [contenteditable="true"]');
   }
 
+  function hasClickableParent(element) {
+    let parent = element.parentElement;
+    for (let i = 0; i < 5 && parent; i++) {
+      if (parent.matches('a, button, [role="button"], [role="link"]')) {
+        return true;
+      }
+      parent = parent.parentElement;
+    }
+    return false;
+  }
+
   async function handleParagraphClick(event) {
     if (isClickInsideInteractiveElement(event.target)) return;
     const selection = window.getSelection && window.getSelection();
     if (selection && selection.type === 'Range' && selection.toString().trim().length > 0) return;
     const paragraph = event.currentTarget;
+    activeLearnableEl = paragraph;
     paragraph.classList.remove(`${EXT_CLS_PREFIX}-selected`);
     await openOverlayForElement(paragraph, paragraph);
   }
@@ -2088,6 +2112,7 @@
     
     elements.forEach((p) => {
       if (clickableNodes.has(p) || p.closest(`.${EXT_CLS_PREFIX}-clickable`)) return;
+      if (hasClickableParent(p)) return;
       if (!hasSubstantialText(p)) return;
       p.classList.add(`${EXT_CLS_PREFIX}-clickable`);
       p.addEventListener('click', handleParagraphClick, true);
@@ -2377,40 +2402,39 @@
     console.log('[LangLab] Finding next learnable item...');
     const learnableItems = Array.from(document.querySelectorAll(`.${EXT_CLS_PREFIX}-clickable, .${EXT_CLS_PREFIX}-image-button-container`));
     
-    if (learnableItems.length === 0) {
-      console.log('[LangLab] No learnable items found on the page.');
+    if (learnableItems.length <= 1) {
+      console.log('[LangLab] Not enough learnable items to navigate.');
       return;
     }
 
-    // Get the vertical position of the current popup to find the next item
-    let currentY = 0;
-    if (popupEl) {
-      const rect = popupEl.getBoundingClientRect();
-      currentY = rect.top + window.scrollY;
-    }
+    const activeIndex = activeLearnableEl ? learnableItems.indexOf(activeLearnableEl) : -1;
+    let nextItem;
 
-    // Find the first learnable item that is below the current popup
-    let nextItem = learnableItems.find(item => {
-      const itemRect = item.getBoundingClientRect();
-      return (itemRect.top + window.scrollY) > (currentY + 5); // Add a 5px buffer
-    });
-
-    // If no item is found below, loop back to the first one
-    if (!nextItem) {
-      console.log('[LangLab] Reached end of page, looping back to the first item.');
-      nextItem = learnableItems[0];
+    if (activeIndex === -1) {
+      let currentY = window.scrollY;
+      if (popupEl) {
+        const rect = popupEl.getBoundingClientRect();
+        currentY = rect.top + window.scrollY;
+      }
+      nextItem = learnableItems.find(item => {
+        const itemRect = item.getBoundingClientRect();
+        return (itemRect.top + window.scrollY) > (currentY + 5);
+      });
+      if (!nextItem) {
+        nextItem = learnableItems[0];
+      }
+    } else {
+      const nextIndex = (activeIndex + 1) % learnableItems.length;
+      nextItem = learnableItems[nextIndex];
     }
 
     if (nextItem) {
       console.log('[LangLab] Next learnable item found:', nextItem);
       
-      // First, close the current popup
       closePopupWithAnimation();
       
-      // Scroll to the next item and trigger it
       nextItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-      // Simulate a click after a short delay to allow the scroll to complete
       setTimeout(() => {
         if (nextItem.classList.contains(`${EXT_CLS_PREFIX}-image-button-container`)) {
           const button = nextItem.querySelector('button');
