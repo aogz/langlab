@@ -1570,7 +1570,7 @@
     });
 
     const leftControls = createElement('div');
-    const btnNext = createButton('', 'secondary');
+    const btnNext = createButton('Next', 'secondary');
     applyStyles(btnNext, {
       height: '36px',
       boxSizing: 'border-box',
@@ -1704,14 +1704,15 @@
       btnExplain.addEventListener('click', async () => {
         try {
           setControlsLoadingState(true, ['Analyzing...', 'Checking grammar...', 'Explaining...']);
-          const { nativeLang } = await chrome.storage.local.get(['nativeLang']);
+          const nativeLang = await getNativeLanguage();
           const detectedLang = await detectLanguageCode(selectedText);
           const result = await askQuestionWithPromptAPI(selectedText, [], [], 'explain', { detectedLang, nativeLang });
 
           if (translationBodyEl) {
+            const translatedResult = await translateTo(result, nativeLang, 'en');
             translationBodyEl.innerHTML = ''; // Clear previous content
             const responseEl = createElement('p', '', { color: '#f8fafc', fontSize: '18px' });
-            responseEl.innerHTML = renderSimpleMarkdown(result);
+            responseEl.innerHTML = renderSimpleMarkdown(translatedResult || result);
             translationBodyEl.appendChild(responseEl);
           }
         } catch (error) {
@@ -2130,6 +2131,7 @@
     const elements = document.querySelectorAll(`${blockElements}, ${leafDivs}`);
     
     elements.forEach((p) => {
+      if (p.closest(`.${EXT_CLS_PREFIX}-container`)) return;
       if (clickableNodes.has(p) || p.closest(`.${EXT_CLS_PREFIX}-clickable`)) return;
       if (hasClickableParent(p)) return;
       if (!hasSubstantialText(p)) return;
@@ -2273,6 +2275,16 @@
 
   // removed local translate; translation runs in service worker via translateTo
 
+  async function getNativeLanguage() {
+    try {
+      if (!chrome.storage || !chrome.storage.local) return 'en';
+      const conf = await new Promise((resolve) => chrome.storage.local.get(['weblangUserLang'], (r)=> resolve(r||{})));
+      return conf && conf.weblangUserLang ? conf.weblangUserLang : 'en';
+    } catch { 
+      return 'en'; 
+    }
+  }
+
   function handleGlobalMouseUp() {
     if (activeWordSelection && activeWordSelection.isDragging) {
       const state = activeWordSelection;
@@ -2307,10 +2319,12 @@
             return;
           }
           const { bodyEl } = createTipPopover(pos, selectedText, true);
-          translateTo(selectedText, 'en', undefined, (msg)=>{ try { bodyEl.textContent = msg; } catch {} }).then((t) => {
+          (async () => {
+            const nativeLang = await getNativeLanguage();
+            const translation = await translateTo(selectedText, nativeLang, undefined, (msg)=>{ try { bodyEl.textContent = msg; } catch {} });
             if (!tipEl) return;
-            setPopupTranslationResult(bodyEl, t || 'Translation not available.');
-          });
+            setPopupTranslationResult(bodyEl, translation || 'Translation not available.');
+          })();
         }
       }
       
