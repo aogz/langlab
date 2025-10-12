@@ -1537,11 +1537,24 @@
   function buildControlsBar(context, selectedText) {
     const bar = createElement('div', `${EXT_CLS_PREFIX}-controls`, {
       display: 'grid',
-      gridTemplateColumns: context === 'sidebar' ? '1fr auto' : '1fr auto',
+      gridTemplateColumns: 'auto 1fr auto',
       alignItems: 'center',
       gap: '10px',
       marginTop: '10px'
     });
+
+    const leftControls = createElement('div');
+    const btnNext = createButton('Next', 'secondary');
+    applyStyles(btnNext, { 
+      padding: '8px 12px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px'
+    });
+    btnNext.innerHTML = `Next <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m7-7-7 7-7-7"/></svg>`;
+    btnNext.title = 'Next learnable item';
+    btnNext.addEventListener('click', findAndActivateNextLearnableItem);
+    leftControls.appendChild(btnNext);
 
     const mainControlsContainer = createElement('div', '', {
       position: 'relative',
@@ -1571,6 +1584,7 @@
 
     const btnAsk = createButton('Ask me a question', 'primary');
     btnAsk.classList.add(`${EXT_CLS_PREFIX}-btn-ask`);
+    applyStyles(btnAsk, { height: '36px', boxSizing: 'border-box' });
     
     btnAsk.addEventListener('click', async () => {
       try {
@@ -1658,6 +1672,7 @@
     if (context !== 'image-popup') {
       const btnExplain = createButton('Explain grammar', 'secondary');
       btnExplain.classList.add(`${EXT_CLS_PREFIX}-btn-explain`);
+      applyStyles(btnExplain, { height: '36px', boxSizing: 'border-box' });
       btnExplain.addEventListener('click', async () => {
         try {
           setControlsLoadingState(true, ['Analyzing...', 'Checking grammar...', 'Explaining...']);
@@ -1686,11 +1701,13 @@
     mainControlsContainer.appendChild(centerWrap);
     mainControlsContainer.appendChild(loadingIndicator);
     
+    bar.appendChild(leftControls);
     bar.appendChild(mainControlsContainer);
 
     // Add View Vocabulary button to the right side
     const btnVocab = createButton('📚 Vocab', 'secondary');
     btnVocab.classList.add(`${EXT_CLS_PREFIX}-btn-vocab`);
+    applyStyles(btnVocab, { height: '36px', boxSizing: 'border-box' });
     btnVocab.addEventListener('click', async () => {
       try {
         await chrome.runtime.sendMessage({ type: 'OPEN_SIDEBAR_REQUEST' });
@@ -2012,7 +2029,6 @@
       return;
     }
     
-    element.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
     const rect = element.getBoundingClientRect();
     
     if (!rect) {
@@ -2340,4 +2356,53 @@
   document.addEventListener('mouseup', handleGlobalMouseUp, true);
   document.addEventListener('mouseup', handlePageTextSelection, false);
   document.addEventListener('mousedown', handleClickOutside, true);
+
+  async function findAndActivateNextLearnableItem() {
+    console.log('[LangLab] Finding next learnable item...');
+    const learnableItems = Array.from(document.querySelectorAll(`.${EXT_CLS_PREFIX}-clickable, .${EXT_CLS_PREFIX}-image-button-container`));
+    
+    if (learnableItems.length === 0) {
+      console.log('[LangLab] No learnable items found on the page.');
+      return;
+    }
+
+    // Get the vertical position of the current popup to find the next item
+    let currentY = 0;
+    if (popupEl) {
+      const rect = popupEl.getBoundingClientRect();
+      currentY = rect.top + window.scrollY;
+    }
+
+    // Find the first learnable item that is below the current popup
+    let nextItem = learnableItems.find(item => {
+      const itemRect = item.getBoundingClientRect();
+      return (itemRect.top + window.scrollY) > (currentY + 5); // Add a 5px buffer
+    });
+
+    // If no item is found below, loop back to the first one
+    if (!nextItem) {
+      console.log('[LangLab] Reached end of page, looping back to the first item.');
+      nextItem = learnableItems[0];
+    }
+
+    if (nextItem) {
+      console.log('[LangLab] Next learnable item found:', nextItem);
+      
+      // First, close the current popup
+      closePopupWithAnimation();
+      
+      // Scroll to the next item and trigger it
+      nextItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      // Simulate a click after a short delay to allow the scroll to complete
+      setTimeout(() => {
+        if (nextItem.classList.contains(`${EXT_CLS_PREFIX}-image-button-container`)) {
+          const button = nextItem.querySelector('button');
+          if (button) button.click();
+        } else {
+          nextItem.click();
+        }
+      }, 500);
+    }
+  }
 })();
