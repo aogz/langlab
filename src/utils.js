@@ -109,6 +109,7 @@ function createElement(tag, className, styles = {}) {
 }
 
 export function populateLanguageSelect(selectElement, placeholder = 'Select language') {
+  selectElement.innerHTML = '';
   const placeholderOption = createElement('option');
   placeholderOption.value = '';
   placeholderOption.textContent = placeholder;
