@@ -245,14 +245,19 @@
   }
 
   function ensureContainer() {
-    if (textContainer && document.body.contains(textContainer)) return textContainer;
+    const containerId = `${EXT_CLS_PREFIX}-main-container`;
+    const existingContainer = document.getElementById(containerId);
+    if (existingContainer) {
+      textContainer = existingContainer;
+      return textContainer;
+    }
     textContainer = createElement('div', `${EXT_CLS_PREFIX}-container`, {
       all: 'initial',
       position: 'fixed',
       inset: '0px',
       pointerEvents: 'none',
       zIndex: '2147483647'
-    });
+    }, { id: containerId });
     document.documentElement.appendChild(textContainer);
     return textContainer;
   }
@@ -276,6 +281,12 @@
     backdropEl = null;
     popupBodyRef = null;
     activeLearnableEl = null;
+    activeParagraphEl = null;
+
+    if (activeParagraphEl) {
+      activeParagraphEl.classList.add(`${EXT_CLS_PREFIX}-clickable`);
+      activeParagraphEl = null;
+    }
 
     // Animate out
     popupToClose.style.opacity = '0';
@@ -1954,8 +1965,8 @@
     // Manage paragraph styles while overlay is open
     if (sourceParagraphEl) {
       activeParagraphEl = sourceParagraphEl;
-      // Remove hover overlay and clickable styling while active
-      activeParagraphEl.classList.remove(`${EXT_CLS_PREFIX}-clickable`, `${EXT_CLS_PREFIX}-selected`);
+      // Remove hover overlay and selected styling while active
+      activeParagraphEl.classList.remove(`${EXT_CLS_PREFIX}-selected`);
     } else {
       activeParagraphEl = null;
     }
@@ -2456,14 +2467,30 @@
 
   async function findAndActivateNextLearnableItem() {
     console.log('[LangLab] Finding next learnable item...');
-    const learnableItems = Array.from(document.querySelectorAll(`.${EXT_CLS_PREFIX}-clickable, .${EXT_CLS_PREFIX}-image-button-container`));
     
+    let learnableItems = Array.from(document.querySelectorAll(`.${EXT_CLS_PREFIX}-clickable, .${EXT_CLS_PREFIX}-image-button-container`));
+    
+    learnableItems.sort((a, b) => {
+      const rectA = a.getBoundingClientRect();
+      const rectB = b.getBoundingClientRect();
+      if (rectA.top !== rectB.top) {
+        return rectA.top - rectB.top;
+      }
+      return rectA.left - rectB.left;
+    });
+
     if (learnableItems.length <= 1) {
       console.log('[LangLab] Not enough learnable items to navigate.');
+      // Re-add class to the current item if it's the only one left
+      if (activeLearnableEl) {
+        activeLearnableEl.classList.add(`${EXT_CLS_PREFIX}-clickable`);
+      }
+      closePopupWithAnimation();
       return;
     }
 
-    const activeIndex = activeLearnableEl ? learnableItems.indexOf(activeLearnableEl) : -1;
+    const prevLearnableEl = activeLearnableEl;
+    const activeIndex = prevLearnableEl ? learnableItems.indexOf(prevLearnableEl) : -1;
     let nextItem;
 
     if (activeIndex === -1) {
@@ -2488,6 +2515,15 @@
       console.log('[LangLab] Next learnable item found:', nextItem);
       
       closePopupWithAnimation();
+
+      if (prevLearnableEl) {
+        if (prevLearnableEl.classList.contains(`${EXT_CLS_PREFIX}-image-button-container`)) {
+          prevLearnableEl.classList.remove(`${EXT_CLS_PREFIX}-image-button-container`);
+        }
+        if (prevLearnableEl.classList.contains(`${EXT_CLS_PREFIX}-clickable`)) {
+          prevLearnableEl.classList.remove(`${EXT_CLS_PREFIX}-clickable`);
+        }
+      }
       
       nextItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
