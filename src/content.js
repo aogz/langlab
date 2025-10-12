@@ -90,13 +90,36 @@
     return btn;
   }
 
+  function startProcessingIndicator(element, texts) {
+    if (!element || !texts || !texts.length) return () => {};
+    let currentIndex = 0;
+    const intervalId = setInterval(() => {
+      element.textContent = texts[currentIndex];
+      currentIndex = (currentIndex + 1) % texts.length;
+    }, 2000);
+    element.textContent = texts[currentIndex];
+    currentIndex = (currentIndex + 1) % texts.length;
+    return () => clearInterval(intervalId);
+  }
+
   function renderSimpleMarkdown(text) {
-    return text
+    let html = text
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/```(javascript|js)?\n([\s\S]*?)```/g, (match, lang, code) => {
+          return `<pre><code>${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>`;
+      })
+      .replace(/`(.*?)`/g, '<code>$1</code>')
       .replace(/^\* (.*$)/gm, '<ul><li>$1</li></ul>')
       .replace(/<\/ul>\n<ul>/g, '')
       .replace(/\n/g, '<br>');
+
+    // Clean up <br>s inside <pre>
+    html = html.replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/g, (match, code) => {
+      return `<pre><code>${code.replace(/<br>/g, '\n')}</code></pre>`;
+    });
+
+    return html;
   }
 
   function animateVocabButton() {
@@ -970,18 +993,73 @@
     row.appendChild(input);
     row.appendChild(right);
     inputContainer.appendChild(row);
+
+    const loadingIndicator = createElement('div', `${EXT_CLS_PREFIX}-response-loading-indicator`, {
+      display: 'none',
+      alignItems: 'center',
+      gap: '8px',
+      fontSize: '14px',
+      color: '#d1d5db',
+      justifyContent: 'center',
+      minWidth: '108px'
+    });
+    const spinner = createElement('div', `${EXT_CLS_PREFIX}-spinner`);
+    const loadingTextSpan = createElement('span');
+    loadingIndicator.appendChild(spinner);
+    loadingIndicator.appendChild(loadingTextSpan);
+    row.appendChild(loadingIndicator);
+    
+    inputContainer.appendChild(row);
     targetEl.appendChild(inputContainer);
 
     let mediaRecorder = null;
     let audioChunks = [];
     let isRecording = false;
+    let recognition = null;
+    let currentTranscript = '';
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      
+      getLearningLanguage().then(lang => {
+        recognition.lang = lang || 'en-US';
+        console.log(`[LangLab] Speech recognition language set to: ${recognition.lang}`);
+      });
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[event.results.length - 1][0].transcript;
+        console.log('[LangLab] Live transcript result:', transcript);
+        currentTranscript = transcript.trim();
+        if (input) {
+          input.value = currentTranscript;
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.error('[LangLab] Speech recognition error:', event.error);
+      };
+
+      recognition.onend = () => {
+        if (isRecording) {
+          console.log('[LangLab] Speech recognition ended prematurely, restarting...');
+          recognition.start();
+        }
+      };
+    }
     
     async function startAudioRecording() {
+      console.log('[LangLab] startAudioRecording called.');
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream, {
-          mimeType: 'audio/webm;codecs=opus'
-        });
+        try {
+          mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+        } catch (e) {
+          console.warn('Opus codec not supported, falling back to default.');
+          mediaRecorder = new MediaRecorder(stream);
+        }
         
         audioChunks = [];
         mediaRecorder.ondataavailable = (event) => {
@@ -991,12 +1069,18 @@
         };
         
         mediaRecorder.onstop = async () => {
+          console.log('[LangLab] mediaRecorder.onstop triggered.');
           const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-          await processAudioInput(audioBlob);
+          await processAudioInput(audioBlob, currentTranscript);
           stream.getTracks().forEach(track => track.stop());
         };
         
         mediaRecorder.start();
+        if (recognition) {
+          console.log('[LangLab] Starting live speech recognition.');
+          currentTranscript = ''; // Reset transcript
+          recognition.start();
+        }
         isRecording = true;
         return true;
       } catch (error) {
@@ -1007,27 +1091,66 @@
     
     function stopAudioRecording() {
       if (mediaRecorder && isRecording) {
+        console.log('[LangLab] stopAudioRecording called, stopping mediaRecorder.');
+        if (recognition) {
+          recognition.stop();
+        }
         mediaRecorder.stop();
         isRecording = false;
       }
     }
     
-    async function processAudioInput(audioBlob) {
+    async function processAudioInput(audioBlob, transcript) {
+      console.log('[LangLab] processAudioInput called with blob size:', audioBlob.size, 'and transcript:', transcript);
+      setControlsLoadingState(true, ["Listening...", "Analyzing...", "Preparing the response..."]);
+      if (inputContainer) inputContainer.style.display = 'none';
+
       try {
-        // Display the recorded audio in the chat
-        displayRecordedAudio(audioBlob);
+        let result;
+        try {
+          console.log('[LangLab] Trying to send audio directly...');
+          result = await sendAudioToTeacher(audioBlob);
+          console.log('[LangLab] sendAudioToTeacher completed successfully.');
+
+          // On success, display the audio player and clear the input
+          displayRecordedAudio(audioBlob);
+          if (input) input.value = '';
+
+        } catch (audioError) {
+          console.error('[LangLab] Error sending audio directly, falling back to transcript:', audioError);
+          if (transcript) {
+            console.log('[LangLab] Pivoting to send transcript.');
+            
+            // On fallback, display the transcript as a user message and clear the input
+            renderResponseCard(targetEl, transcript, inputContainer);
+            if (input) input.value = '';
+
+            result = await sendTextToTeacher(transcript);
+            console.log('[LangLab] sendTextToTeacher completed successfully.');
+
+          } else {
+            throw new Error('Audio sending failed and no transcript was available.');
+          }
+        }
         
-        // Send audio blob directly to AI teacher for processing
-        await sendAudioToTeacher(audioBlob);
-      } catch (error) {
-        console.error('Error processing audio:', error);
-        // Reset button state on error
+        // Render the AI's response for either success path
+        renderQuestionClickableBlock(targetEl, result, inputContainer);
+
+      } catch (finalError) {
+        console.error('[LangLab] Final processing error:', finalError);
+        renderQuestionClickableBlock(targetEl, 'Sorry, I couldn\'t process your response. Please try again.', inputContainer);
+      } finally {
+        setControlsLoadingState(false);
+        updateInputVisibility(targetEl);
         resetMicButton();
       }
     }
     
     
     function resetMicButton() {
+      micBtn.disabled = false;
+      input.disabled = false;
+      input.placeholder = 'Type your answer…';
       micBtn.style.background = 'rgba(31,41,55,0.7)';
       micBtn.style.color = '#e5e7eb';
       micBtn.innerHTML = `
@@ -1054,115 +1177,155 @@
       // Create audio element
       const audio = createElement('audio', '', {
         width: '100%',
-        marginBottom: '8px'
+        marginBottom: '0px'
       });
       audio.controls = true;
       audio.src = URL.createObjectURL(audioBlob);
       
-      // Create processing indicator
-      const processingDiv = createElement('div', `${EXT_CLS_PREFIX}-processing`, {
-        color: '#9ca3af',
-        fontSize: '14px',
-        fontStyle: 'italic'
-      });
-      processingDiv.textContent = 'Processing audio...';
-      
-      // Add elements to container
       audioContainer.appendChild(audio);
-      audioContainer.appendChild(processingDiv);
       
       // Insert before the input container
       targetEl.insertBefore(audioContainer, inputContainer);
       
-      // Store references for later updates
-      audioContainer._processingDiv = processingDiv;
       audioContainer._audioBlob = audioBlob;
       
       return audioContainer;
     }
     
     async function sendAudioToTeacher(audioBlob) {
-      try {
-        // Update processing display
-        const audioContainers = targetEl.querySelectorAll(`.${EXT_CLS_PREFIX}-audio-message`);
-        const latestContainer = audioContainers[audioContainers.length - 1];
-        if (latestContainer && latestContainer._processingDiv) {
-          latestContainer._processingDiv.textContent = 'Sending to AI teacher...';
-        }
-        
-        // Send to AI teacher for explanation
-        const requestId = `weblang_teacher_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-        
-        return new Promise((resolve, reject) => {
-          const onResult = (e) => {
-            try {
-              if (!e || !e.detail || e.detail.id !== requestId) return;
-              window.removeEventListener('weblang-teacher-result', onResult, true);
-              if (e.detail.ok) {
-                const explanation = e.detail.result || '';
-                if (explanation && latestContainer) {
-                  // Update processing indicator
-                  if (latestContainer._processingDiv) {
-                    latestContainer._processingDiv.style.display = 'none';
-                  }
-                  
-                  // Add teacher's explanation
-                  const explanationDiv = createElement('div', `${EXT_CLS_PREFIX}-teacher-explanation`, {
-                    marginTop: '8px',
-                    padding: '8px',
-                    background: 'rgba(37,99,235,0.1)',
-                    borderRadius: '6px',
-                    fontSize: '14px',
-                    color: '#e5e7eb'
-                  });
-                  explanationDiv.innerHTML = `<strong>AI Teacher:</strong> ${explanation}`;
-                  latestContainer.appendChild(explanationDiv);
-                }
-                resolve(explanation);
-              } else {
-                const errMsg = e.detail.error || 'Teacher explanation failed';
-                console.error('Teacher explanation error:', errMsg);
-                if (latestContainer && latestContainer._processingDiv) {
-                  latestContainer._processingDiv.textContent = 'Error processing audio';
-                  latestContainer._processingDiv.style.color = '#ef4444';
-                }
-                reject(new Error(errMsg));
-              }
-            } catch (err) {
-              window.removeEventListener('weblang-teacher-result', onResult, true);
-              reject(err);
-            }
-          };
-          
-          window.addEventListener('weblang-teacher-result', onResult, true);
-          
-          try {
-            chrome.runtime && chrome.runtime.sendMessage({ 
-              type: 'WEBLANG_TEACHER_REQUEST', 
-              id: requestId, 
-              audioBlob: audioBlob,
-              language: lang || 'en'
-            });
-          } catch (err) {
-            window.removeEventListener('weblang-teacher-result', onResult, true);
-            reject(err);
+      console.log('[LangLab] sendAudioToTeacher called.');
+      const requestId = `weblang_teacher_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const isImageQuestion = targetEl.classList.contains(`${EXT_CLS_PREFIX}-image-question-container`);
+      
+      return new Promise((resolve, reject) => {
+        const onResult = async (e) => {
+          if (!e || !e.detail || e.detail.id !== requestId) return;
+          window.removeEventListener('weblang-teacher-result', onResult, true);
+          if (e.detail.ok) {
+            const explanation = e.detail.result || '';
+            const translatedResult = await translateQuestionToLearningLanguage(explanation);
+            resolve(translatedResult);
+          } else {
+            reject(new Error(e.detail.error || 'Unknown error'));
           }
-        });
-      } catch (error) {
-        console.error('Error sending to teacher:', error);
-      }
+        };
+
+        window.addEventListener('weblang-teacher-result', onResult, true);
+        
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64Audio = reader.result;
+          const detail = {
+            id: requestId,
+            type: 'answer',
+            audio: base64Audio,
+            lang: detectedLang,
+            isImageQuestion
+          };
+          window.dispatchEvent(new CustomEvent('weblang-page-prompt', { detail }));
+        };
+        reader.onerror = (error) => {
+          reject(error);
+        };
+        reader.readAsDataURL(audioBlob);
+      });
+    }
+
+    async function transcribeAudioWithSpeechRecognition(audioBlob) {
+      return new Promise(async (resolve, reject) => {
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        if (!recognition) {
+          return reject('Speech Recognition API not supported.');
+        }
+
+        recognition.lang = 'en-US';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          resolve(transcript);
+        };
+
+        recognition.onerror = (event) => {
+          reject(`Speech recognition error: ${event.error}`);
+        };
+        
+        try {
+          const arrayBuffer = await audioBlob.arrayBuffer();
+          const audioContext = new AudioContext();
+          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+          const source = audioContext.createBufferSource();
+          source.buffer = audioBuffer;
+          const streamDestination = audioContext.createMediaStreamDestination();
+          source.connect(streamDestination);
+          const stream = streamDestination.stream;
+          
+          // SpeechRecognition needs a MediaStreamTrack
+          const audioTrack = stream.getAudioTracks()[0];
+          const mediaStream = new MediaStream([audioTrack]);
+
+          // This is a workaround since SpeechRecognition API doesn't directly accept a MediaStream
+          const audio = new Audio();
+          audio.srcObject = mediaStream;
+          audio.play();
+
+          recognition.start();
+
+          source.onended = () => {
+            setTimeout(() => {
+              recognition.stop();
+              audioContext.close();
+            }, 1000);
+          };
+          source.start();
+          
+        } catch (error) {
+          reject(`Error processing audio for transcription: ${error}`);
+        }
+      });
+    }
+
+    async function sendTextToTeacher(text) {
+      console.log('[LangLab] sendTextToTeacher called with text:', text);
+      const requestId = `weblang_teacher_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const isImageQuestion = targetEl.classList.contains(`${EXT_CLS_PREFIX}-image-question-container`);
+      
+      return new Promise((resolve, reject) => {
+        const onResult = async (e) => {
+          if (!e || !e.detail || e.detail.id !== requestId) return;
+          window.removeEventListener('weblang-teacher-result', onResult, true);
+
+          if (e.detail.ok) {
+            const explanation = e.detail.result || '';
+            const translatedResult = await translateQuestionToLearningLanguage(explanation);
+            resolve(translatedResult);
+          } else {
+            reject(new Error(e.detail.error || 'Unknown error'));
+          }
+        };
+
+        window.addEventListener('weblang-teacher-result', onResult, true);
+        
+        const detail = {
+          id: requestId,
+          type: 'answer',
+          text,
+          lang: detectedLang,
+          isImageQuestion
+        };
+        window.dispatchEvent(new CustomEvent('weblang-page-prompt', { detail }));
+      });
     }
 
     micBtn.addEventListener('click', async () => {
       if (isRecording) {
-        // Stop recording
+        console.log('[LangLab] Stop recording button clicked.');
         stopAudioRecording();
-        resetMicButton();
-        input.disabled = false;
-        input.placeholder = 'Type your answer…';
         return;
       }
       
+      console.log('[LangLab] Start recording button clicked.');
       // Check if MediaRecorder is supported
       if (!navigator.mediaDevices || !window.MediaRecorder) {
         micBtn.title = 'Audio recording not supported in this browser';
@@ -1194,19 +1357,12 @@
       const txt = (input.value || '').trim();
       if (!txt) return;
       
-      // Hide input while processing
-      inputContainer.style.display = 'none';
+      setControlsLoadingState(true, ['Evaluating...', 'Checking...', 'Almost there...']);
+      if (inputContainer) inputContainer.style.display = 'none';
       
       const answerContainer = renderResponseCard(targetEl, txt, inputContainer);
       const isImageQuestion = targetEl.classList.contains(`${EXT_CLS_PREFIX}-image-question-container`);
       scrollToBottom(isImageQuestion ? targetEl.parentElement : targetEl);
-      
-      // Show "Thinking..." state on the ask button
-      setControlsLoadingState(true, ['Evaluating...', 'Checking...', 'Almost there...']);
-      const askBtn = popupEl ? popupEl.querySelector(`.${EXT_CLS_PREFIX}-btn-ask`) : null;
-      if (askBtn) {
-        askBtn.textContent = 'Thinking…';
-      }
       
       // Evaluate the answer using Prompt API (page-side) when available
       try {
@@ -1260,11 +1416,8 @@
             const isImageQuestion = targetEl.classList.contains(`${EXT_CLS_PREFIX}-image-question-container`);
             scrollToBottom(isImageQuestion ? targetEl.parentElement : targetEl);
 
-            // Re-enable ask button for follow-up questions
+            // Re-enable controls
             setControlsLoadingState(false);
-            if (askBtn) {
-              askBtn.textContent = 'Ask a follow-up';
-            }
             
             // Update input visibility based on conversation state
             updateInputVisibility(targetEl);
@@ -1272,19 +1425,21 @@
             if (inputContainer.style.display !== 'none') {
               input.focus();
             }
-          } catch {}
+          } catch (err) {
+            console.error('Error handling eval result:', err);
+            setControlsLoadingState(false);
+            updateInputVisibility(targetEl);
+          } finally {
+            setControlsLoadingState(false);
+            updateInputVisibility(targetEl);
+          }
         };
         window.addEventListener('weblang-eval-result', onEval, true);
         chrome.runtime && chrome.runtime.sendMessage({ type: 'WEBLANG_EVAL_REQUEST', id: requestId, question: questionText, answer: txt, context: contextText, history: conversationHistory });
-      } catch {
-        // Re-enable ask button on error
+      } catch (err) {
+        console.error('Answer evaluation failed:', err);
         setControlsLoadingState(false);
-        if (askBtn) {
-          askBtn.textContent = 'Ask me a question';
-        }
-        // Show input again on error
         updateInputVisibility(targetEl);
-        input.value = '';
       }
     }
     sendBtn.addEventListener('click', handleSend);
@@ -1826,6 +1981,26 @@
       }
       @keyframes weblang-spinner-anim {
         to { transform: rotate(360deg); }
+      }
+      .${EXT_CLS_PREFIX}-teacher-explanation code {
+        background-color: rgba(0,0,0,0.2);
+        padding: 2px 5px;
+        border-radius: 4px;
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+        font-size: 13px;
+      }
+      .${EXT_CLS_PREFIX}-teacher-explanation pre {
+        background-color: rgba(0,0,0,0.3);
+        padding: 10px;
+        border-radius: 6px;
+        overflow-x: auto;
+        margin: 8px 0;
+        font-size: 13px;
+        white-space: pre-wrap;
+      }
+      .${EXT_CLS_PREFIX}-teacher-explanation pre code {
+        padding: 0;
+        background: transparent;
       }
     `;
     document.head.appendChild(style);

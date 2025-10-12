@@ -30,7 +30,7 @@ Based on the history, ask one new, different question in English about the follo
         ? `This is the conversation history (the last message is the user's latest answer):\n${history.map(item => `${item.role}: ${item.content}`).join('\n')}`
         : '';
 
-      return `You are a friendly and encouraging language tutor. Your goal is to provide simple, clear, and concise feedback on a student's answer. Keep your response to 1-2 sentences.
+      return `You are a friendly and encouraging language tutor. Your goal is to provide simple, clear, and concise feedback on a student's answer. Your response must be 1-2 sentences, not more. Don't use markdown or html.
 
 ${historyText}
 
@@ -40,7 +40,7 @@ Analyze the student's latest answer based on the provided context, question, and
 - If the answer is mostly correct, point out the small error and provide the correction.
 - If the answer is incorrect, gently correct them and provide a better example.
 
-Be encouraging and brief.
+Be encouraging and brief (1-3 sentences maximum). Don't use markdown or html.
 
 Context:
 ${context}
@@ -59,23 +59,36 @@ ${answer}`;
     }),
 
     // For teacher feedback on audio
-    teacherFeedback: (audioBlob) => ([{
-      role: "user",
-      content: [{
-        type: "text",
-        value: "You are a helpful language teacher. The student has provided an audio answer. Please listen to the audio and provide constructive feedback on their pronunciation, grammar, and language usage. Be encouraging and specific about what they did well and what they can improve. Keep your response concise but helpful."
-      }, {
-        type: "audio",
-        value: audioBlob
-      }]
-    }]),
+    teacherFeedback: (audioBuffer, lang, isImage) => {
+      const prompt = `You are a helpful language teacher. A student has provided an audio answer in ${lang}.
+The question was about ${isImage ? 'an image' : 'a text'}.
+Please listen to the audio and provide constructive feedback on their pronunciation, grammar, and clarity. Be encouraging and specific. Keep your response concise (1-3 sentences maximum). Don't use markdown or html.`;
+      return [{
+        role: "user",
+        content: [{
+          type: "text",
+          value: prompt
+        }, {
+          type: "audio",
+          value: audioBuffer
+        }]
+      }];
+    },
+    
+    teacherFeedbackText: (text, lang, isImage) => {
+      const prompt = `You are a helpful language teacher. A student has provided a text answer in ${lang}.
+The question was about ${isImage ? 'an image' : 'a text'}.
+Please review the text and provide constructive feedback on their grammar and clarity. Be encouraging and specific. Keep your response concise (1-3 sentences maximum). Don't use markdown or html.
+Student's answer: "${text}"`;
+      return prompt;
+    },
 
     // For asking a question about an image
     imageQuestion: (imageBlob) => ([{
       role: "user",
       content: [{
         type: "text",
-        value: "You are a helpful language teacher. Look at this image and ask one engaging question in English that tests the student's ability to describe, analyze, or discuss what they see in the image. The question should be appropriate for language learning and encourage detailed responses. Output only the question, no preface or explanation."
+        value: "You are a helpful language teacher. Look at this image and ask one engaging question in English that tests the student's ability to describe, analyze, or discuss what they see in the image. The question should be appropriate for language learning and encourage detailed responses. Output only the question, no preface or explanation. It must be 1 question, not more. Don't use markdown or html."
       }, {
         type: "image",
         value: imageBlob

@@ -62,7 +62,9 @@
         outputLanguage: 'en'
       });
       const prompt = window.WEBLANG_PROMPTS.evaluate(ctx, question, answer, history);
+      console.log('[LangLab] Evaluation prompt:', prompt);
       const result = await session.prompt(prompt);
+      console.log('[LangLab] Evaluation result:', result);
       const out = (typeof result === 'string' && result.trim()) ? result.trim() : 'No evaluation.';
       window.dispatchEvent(new CustomEvent('weblang-eval-result', {
         detail: {
@@ -130,26 +132,39 @@
   async function teacherHandle(e) {
     const d = e && e.detail || {};
     const id = d.id;
-    const audioBlob = d.audioBlob;
-    const language = d.language || 'en';
-    if (!id || !audioBlob) return;
+    const { audio, text, lang, isImageQuestion } = d;
+    
+    if (!id || (!audio && !text)) return;
+
     try {
       if (!("LanguageModel" in window)) throw new Error('Prompt API not supported in this browser.');
-      const availability = await window.LanguageModel.availability({
-        outputLanguage: 'en'
-      });
+      const availability = await window.LanguageModel.availability({ outputLanguage: 'en' });
       if (availability === 'unavailable') throw new Error('On-device model unavailable.');
-      const session = await window.LanguageModel.create({
-        outputLanguage: 'en',
-        expectedInputs: [{
-          type: "audio"
-        }]
-      });
 
-      // Create multimodal prompt with audio input for teacher feedback
-      const prompt = window.WEBLANG_PROMPTS.teacherFeedback(audioBlob);
+      let session;
+      let prompt;
+
+      if (text) {
+        session = await window.LanguageModel.create({ outputLanguage: 'en' });
+        prompt = window.WEBLANG_PROMPTS.teacherFeedbackText(text, lang, isImageQuestion);
+      } else if (audio) {
+        session = await window.LanguageModel.create({
+          outputLanguage: 'en',
+          expectedInputs: [{
+            type: "audio"
+          }]
+        });
+        const audioData = audio.split(',')[1];
+        const audioBuffer = new Uint8Array(atob(audioData).split("").map(c => c.charCodeAt(0))).buffer;
+        prompt = window.WEBLANG_PROMPTS.teacherFeedback(audioBuffer, lang, isImageQuestion);
+      } else {
+        throw new Error("No text or audio provided for teacher feedback.");
+      }
+      
+      console.log('[LangLab] Teacher prompt:', JSON.stringify(prompt, null, 2));
 
       const result = await session.prompt(prompt);
+      console.log('[LangLab] Teacher result:', result);
       const out = (typeof result === 'string' && result.trim()) ? result.trim() : '';
       if (!out) throw new Error('Model returned an empty response.');
       window.dispatchEvent(new CustomEvent('weblang-teacher-result', {
@@ -160,6 +175,7 @@
         }
       }));
     } catch (e) {
+      console.error('[LangLab] Teacher request error:', e);
       const msg = (e && e.message) ? e.message : 'Unknown error';
       window.dispatchEvent(new CustomEvent('weblang-teacher-result', {
         detail: {
@@ -170,7 +186,7 @@
       }));
     }
   }
-  window.addEventListener('weblang-teacher-request', teacherHandle, true);
+  window.addEventListener('weblang-page-prompt', teacherHandle, true);
 
   async function imageHandle(e) {
     const d = e && e.detail || {};
