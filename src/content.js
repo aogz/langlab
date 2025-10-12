@@ -29,6 +29,10 @@
   let dragListenersAttached = false;
   let currentDetectedLanguage = 'unknown';
   const progressCallbacks = new Map();
+  let pageVocabCount = 0;
+  let vocabWidgetEl = null;
+  let isActive = false;
+  let observer = null;
 
   const tooltip = createElement('div', `${EXT_CLS_PREFIX}-tooltip`, {}, { id: `${EXT_CLS_PREFIX}-tooltip`, innerText: '🧪 Click to learn in LangLab' });
   document.body.appendChild(tooltip);
@@ -226,6 +230,10 @@
       });
 
       if (response && response.success) {
+        if (response.isNewWord) {
+          pageVocabCount++;
+          showOrUpdateVocabWidget();
+        }
         return response;
       } else {
         throw new Error(response.error || 'Failed to save word');
@@ -2363,6 +2371,21 @@
       makeElementsClickable();
     }
     
+    if (message.type === 'VOCAB_COUNT_UPDATED') {
+      pageVocabCount = message.count;
+      showOrUpdateVocabWidget();
+    }
+    
+    if (message.type === 'ACTIVATE_AND_UPDATE') {
+      activate();
+      pageVocabCount = message.count;
+      showOrUpdateVocabWidget();
+    }
+
+    if (message.type === 'DEACTIVATE') {
+      deactivate();
+    }
+    
     // Handle image fetch results from service worker
     if (message.type === 'WEBLANG_IMAGE_FETCH_RESULT') {
       const { id, ok, result, error, mimeType } = message;
@@ -2385,18 +2408,51 @@
     }
   });
 
-  // Initialize
-  addClickableStyles();
-  makeElementsClickable();
-  attachImageClickHandlers();
-  const observer = new MutationObserver(() => {
+  function activate() {
+    if (isActive) return;
+    isActive = true;
+    addClickableStyles();
     makeElementsClickable();
     attachImageClickHandlers();
-  });
-  observer.observe(document.body, { childList: true, subtree: true });
-  document.addEventListener('mouseup', handleGlobalMouseUp, true);
-  document.addEventListener('mouseup', handlePageTextSelection, false);
-  document.addEventListener('mousedown', handleClickOutside, true);
+    observer = new MutationObserver(() => {
+      makeElementsClickable();
+      attachImageClickHandlers();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    document.addEventListener('mouseup', handleGlobalMouseUp, true);
+    document.addEventListener('mouseup', handlePageTextSelection, false);
+    document.addEventListener('mousedown', handleClickOutside, true);
+    console.log('[LangLab] Content script activated.');
+  }
+
+  function deactivate() {
+    if (!isActive) return;
+    isActive = false;
+    // Hide all UI
+    closePopupWithAnimation();
+    clearTip();
+    hideStartLearningWidget();
+    pageVocabCount = 0;
+    showOrUpdateVocabWidget();
+  
+    // Remove all event listeners and mutations observers
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+    }
+    document.removeEventListener('mouseup', handleGlobalMouseUp, true);
+    document.removeEventListener('mouseup', handlePageTextSelection, false);
+    document.removeEventListener('mousedown', handleClickOutside, true);
+    
+    // Remove clickable classes and event listeners
+    document.querySelectorAll(`.${EXT_CLS_PREFIX}-clickable`).forEach(el => {
+      el.classList.remove(`${EXT_CLS_PREFIX}-clickable`);
+      // It's tricky to remove the exact event listener without a reference,
+      // but since we check `isActive` now, they won't do anything.
+    });
+  
+    console.log('[LangLab] Content script deactivated.');
+  }
 
   async function findAndActivateNextLearnableItem() {
     console.log('[LangLab] Finding next learnable item...');
@@ -2535,4 +2591,83 @@
       showStartLearningWidget();
     }
   }, 500);
+
+  function ensureVocabWidget() {
+    const existingWidget = document.getElementById(`${EXT_CLS_PREFIX}-vocab-widget`);
+    if (existingWidget) {
+      vocabWidgetEl = existingWidget;
+      return;
+    }
+  
+    vocabWidgetEl = createElement('div', '', {
+      position: 'fixed',
+      bottom: '20px',
+      right: '20px',
+      zIndex: '2147483646',
+      opacity: '0',
+      transition: 'opacity 0.5s ease-in-out',
+      pointerEvents: 'none'
+    }, { id: `${EXT_CLS_PREFIX}-vocab-widget` });
+  
+    const button = createButton('', 'secondary');
+    applyStyles(button, {
+      boxShadow: '0 8px 20px rgba(0,0,0,0.25)',
+      height: '36px',
+      boxSizing: 'border-box',
+      padding: '0 16px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px'
+    });
+  
+    button.addEventListener('click', async () => {
+      try {
+        await chrome.runtime.sendMessage({ type: 'OPEN_SIDEBAR_REQUEST' });
+      } catch (error) {
+        console.error('Failed to open sidebar:', error);
+      }
+    });
+  
+    vocabWidgetEl.appendChild(button);
+    document.body.appendChild(vocabWidgetEl);
+  }
+  
+  function showOrUpdateVocabWidget() {
+    if (pageVocabCount < 1) {
+      const widget = document.getElementById(`${EXT_CLS_PREFIX}-vocab-widget`);
+      if (widget) {
+        widget.style.opacity = '0';
+        widget.style.pointerEvents = 'none';
+        setTimeout(() => {
+          if (widget.parentNode) {
+            widget.parentNode.removeChild(widget);
+          }
+        }, 500);
+      }
+      vocabWidgetEl = null;
+    } else {
+      ensureVocabWidget();
+      
+      const button = vocabWidgetEl.querySelector('button');
+      button.innerHTML = `📚 Vocab (${pageVocabCount})`;
+      vocabWidgetEl.style.opacity = '1';
+      vocabWidgetEl.style.pointerEvents = 'auto';
+    }
+  }
+
+  // Load initial vocab count for the page
+  (async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'GET_VOCAB_COUNT_FOR_URL',
+        url: window.location.href
+      });
+      if (response && response.success) {
+        pageVocabCount = response.count;
+        showOrUpdateVocabWidget();
+      }
+    } catch (error) {
+      console.error('Failed to get initial vocab count:', error);
+    }
+  })();
 })();

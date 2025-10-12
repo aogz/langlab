@@ -283,6 +283,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Indicates that the response is sent asynchronously
   }
 
+  if (message.type === 'GET_VOCAB_COUNT_FOR_URL') {
+    const { url } = message;
+    getVocabCountForUrl(url)
+      .then(count => sendResponse({ success: true, count }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
   if (message.type === 'DETECT_LANGUAGE') {
     detectLanguageCode(message.text, sender.tab.id, message.requestId)
       .then(result => sendResponse({ success: true, result }))
@@ -478,34 +486,80 @@ async function saveWordToVocab(selectedWord, translationText, url, title, detect
   }
 }
 
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.url && tab.url.startsWith('http')) {
-    const { ignoreList = [] } = await chrome.storage.local.get('ignoreList');
-    const domain = getDomainFromUrl(tab.url);
+async function getVocabCountForUrl(url) {
+  try {
+    if (!chrome.storage || !chrome.storage.local) {
+      throw new Error('Storage not available');
+    }
+    const urlKey = `weblang_vocab_${btoa(url).replace(/[^a-zA-Z0-9]/g, '')}`;
+    const result = await new Promise((resolve, reject) => {
+      chrome.storage.local.get([urlKey], (data) => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve(data);
+        }
+      });
+    });
+    const vocab = result[urlKey] || [];
+    return vocab.length;
+  } catch (error) {
+    console.error('Failed to get vocab count:', error);
+    return 0;
+  }
+}
+
+async function handleNavigationOrUpdate(tabId, url) {
+  if (!url || !url.startsWith('http')) return;
+
+  try {
+    const { weblangLearnLang, ignoreList = [] } = await chrome.storage.local.get(['weblangLearnLang', 'ignoreList']);
+    const domain = getDomainFromUrl(url);
+
     if (domain && ignoreList.includes(domain)) {
+      // If domain is ignored, ensure content script is deactivated
+      chrome.tabs.sendMessage(tabId, { type: 'DEACTIVATE' }).catch(() => {});
       return;
     }
 
-    const data = await chrome.storage.local.get('weblangLearnLang');
-    const learningLang = data.weblangLearnLang;
-
-    if (learningLang) {
-      chrome.scripting.executeScript({
-        target: { tabId: tabId },
+    if (weblangLearnLang) {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId },
         function: () => document.documentElement.lang
-      }, (results) => {
-        if (results && results[0] && results[0].result === learningLang) {
-          chrome.scripting.insertCSS({
-            target: { tabId: tabId },
-            files: ['styles.css']
-          });
-          chrome.scripting.executeScript({
-            target: { tabId: tabId },
-            files: ['content.js']
-          });
-        }
       });
+
+      if (results && results[0] && results[0].result === weblangLearnLang) {
+        // Language matches, ensure content script is injected and activated
+        await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+        
+        const vocabCount = await getVocabCountForUrl(url);
+        chrome.tabs.sendMessage(tabId, { type: 'ACTIVATE_AND_UPDATE', count: vocabCount }).catch(() => {});
+      } else {
+        // Language does not match, deactivate content script
+        chrome.tabs.sendMessage(tabId, { type: 'DEACTIVATE' }).catch(() => {});
+      }
     }
+  } catch (error) {
+    console.warn(`Error handling navigation for tab ${tabId}:`, error);
+  }
+}
+
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete') {
+    handleNavigationOrUpdate(tabId, tab.url);
+  }
+});
+
+chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
+  if (details.frameId === 0) {
+    handleNavigationOrUpdate(details.tabId, details.url);
+  }
+});
+
+chrome.webNavigation.onReferenceFragmentUpdated.addListener((details) => {
+  if (details.frameId === 0) {
+    handleNavigationOrUpdate(details.tabId, details.url);
   }
 });
 
