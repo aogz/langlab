@@ -20,10 +20,10 @@ Hold down a key, select the words you don't know, and get an instant translation
 
 -   **Interactive Word Selection**: Click on any text block to activate the selection mode.
 -   **Instant, On-Device Translation**: Get real-time translations for words and phrases.
--   **Contextual Q&A**: Ask questions about the selected text or even images on the page to deepen your understanding.
+-   **Multimodal Q&A**: Deepen your understanding by asking questions about text, or provide an image and have the AI generate questions for you. You can even answer with your voice!
 -   **Grammar Guru**: Instantly get clear explanations for complex sentences and grammatical structures.
--   **Elegant Sidebar UI**: View translations and manage settings in a sleek, modern sidebar that doesn't get in your way.
--   **Automatic Language Detection**: LangLab intelligently detects the source language for accurate translations.
+-   **Elegant Sidebar UI**: View translations, answers, and questions in a sleek, modern sidebar that doesn't get in your way.
+-   **Automatic Language Detection**: Intelligently detects the source language for accurate translations.
 -   **Personalized for You**: Set your native and target languages to tailor the experience to your learning journey.
 -   **Privacy-First**: All translations are handled client-side, ensuring your browsing and learning habits remain private.
 
@@ -31,8 +31,10 @@ Hold down a key, select the words you don't know, and get an instant translation
 
 LangLab is proud to be built using **Chrome's built-in AI APIs**, participating in the **Google Chrome Built-in AI Challenge 2025**. We leverage the following APIs to create a comprehensive learning experience:
 
--   **Translator API**: Delivers a fast, private, and seamless translation experience for selected text.
--   **Prompt API**: Powers our Contextual Q&A and Grammar Guru features. With multimodal support, you can even ask questions about images, making it a perfect tool for visual learners.
+-   **Translator API**: Delivers a fast, private, and seamless translation experience for selected text
+- **Language Detection API**: Built-in language detection to activate extension only when needed.
+-   **Prompt API**: Powers our Contextual Q&A and Grammar Guru features. 
+   - Multimodal support for **image and audio input**, you can provide an image to generate questions or speak your answers directly to the extension.
 
 Using on-device models means:
 -   **🚀 Blazing Speeds**: Translations are almost instantaneous.
