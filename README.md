@@ -1,6 +1,6 @@
-# 🚀 LangLab Extension: Your Ultimate Language Learning Companion
+# 🚀 LangLab: Turn the Web into Your Language Classroom
 
-**Unlock a seamless language learning experience directly in your browser. LangLab helps you interact with any webpage in a new way, turning the content you love into your next lesson.**
+**LangLab is a revolutionary Chrome extension that transforms the entire web into a personalized, interactive language classroom. Stop switching tabs and start immersing yourself in any language, on any site.**
 
 [![Google Chrome Built-in AI Challenge 2025 Submission](https://img.shields.io/badge/Google%20Chrome%20AI%20Challenge-2025-blueviolet)](https://googlechromeai2025.devpost.com/)
 
@@ -10,9 +10,9 @@
 
 Language learners thrive on immersion. Reading articles, blogs, and news in a target language is one of the most effective ways to build vocabulary and understanding. However, the constant need to switch tabs to look up unknown words breaks the flow, disrupts concentration, and makes the learning process feel disjointed and frustrating.
 
-## Our Solution: Seamless, On-the-Fly Translation
+## Our Solution: The Web Is Your Classroom
 
-**LangLab** is a Chrome extension that transforms any webpage into an interactive language-learning playground. Inspired by the best language-learning apps, it brings powerful, client-side translation right to your fingertips. No more copy-pasting, no more context switching. Just pure, uninterrupted learning.
+**LangLab** is a Chrome extension that transforms any webpage into an interactive language-learning playground. It turns the content you already love—articles, blogs, and stories—into your next lesson. With powerful, on-device AI, you can translate words, get grammar explanations, and even ask questions about the text and images without ever leaving the page. No more copy-pasting, no more context switching. Just pure, uninterrupted immersion.
 
 Hold down a key, select the words you don't know, and get an instant translation in a clean, unobtrusive sidebar. It's that simple.
 
