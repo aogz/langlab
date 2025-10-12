@@ -63,6 +63,7 @@
           <button type="submit" id="saveBtn" class="btn btn-primary">Start Learning</button>
           <a href="#" id="skipBtn" class="skip-link">I'll do this later</a>
         </div>
+        <div id="error-message" class="error-message" style="display: none;"></div>
       </form>
     </section>
     
@@ -71,105 +72,27 @@
     </footer>
   </div>
 
-  <div id="tutorial" class="tutorial-container" style="display: none;">
-    <div class="tutorial-step active" data-step="1">
-      <div class="tutorial-content">
-        <h2>1. Select any text or click on paragraphs</h2>
-        <p>You're all set to learn <strong id="tutorialLanguageName" style="color: #60a5fa;">your chosen language</strong>! Visit any website in that language, then highlight text or simply click on a paragraph to bring up the LangLab popup.</p>
-        <div class="tutorial-animation anim-step1">
-          <div class="mock-browser">
-            <div class="mock-page">
-              <div class="mock-paragraph">Lorem ipsum dolor sit amet, consectetur adipiscing elit.</div>
-              <div class="mock-paragraph" id="paragraph-anim-target">Sed do eiusmod <span class="text-selection-target">tempor incididunt</span> ut labore et dolore magna aliqua.</div>
-              <div class="mock-paragraph">Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</div>
-            </div>
-            <div class="mock-cursor"></div>
-            <div class="mock-popup">Click a word to translate, or...<br><button class="mock-ask-btn">Ask AI a question</button></div>
-          </div>
-        </div>
-      </div>
+  <div id="video-step" class="video-step" style="display: none;">
+    <header class="setup-header">
+      <h1 class="setup-title">How it works 🚀</h1>
+      <p class="setup-subtitle">Watch this short video to see how to use LangLab to learn on any website.</p>
+    </header>
+    <div class="video-container">
+      <iframe 
+        width="560" 
+        height="315" 
+        src="https://www.youtube.com/embed/dQw4w9WgXcQ" 
+        title="YouTube video player" 
+        frameborder="0" 
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+        allowfullscreen>
+      </iframe>
     </div>
-    <div class="tutorial-step" data-step="2">
-      <div class="tutorial-content">
-        <h2>2. Translate anything</h2>
-        <p>Select a single word or a sequence of words inside the popup to get a quick translation.</p>
-        <div class="tutorial-animation anim-step2">
-          <div class="mock-browser">
-            <div class="mock-popup">
-              <div class="mock-popup-text">
-                <span>Sed</span> <span>do</span> <span class="highlight-word">eiusmod</span> <span class="highlight-word">tempor</span> <span>incididunt</span> <span>ut</span> <span>labore.</span>
-              </div>
-              <div class="mock-translation-tip">
-                <strong>eiusmod tempor</strong>
-                <p>a certain time</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div class="get-started-info">
+      <p><strong>To get started:</strong> Open any website in <strong id="learningLanguageName" class="learning-language-name">your new language</strong>. We recommend a text-rich site like a news outlet, blog, or Wikipedia article to begin your learning journey.</p>
     </div>
-    <div class="tutorial-step" data-step="3">
-      <div class="tutorial-content">
-        <h2>3. Add unknown words to your vocabulary</h2>
-        <p>Save new words to your personal vocabulary list to practice them later.</p>
-        <div class="tutorial-animation anim-step3">
-          <div class="mock-browser">
-            <div class="mock-translation-tip">
-              <strong>eiusmod tempor</strong>
-              <p>a certain time</p>
-              <button class="mock-vocab-btn">📚 Add to Vocab</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="tutorial-step" data-step="4">
-      <div class="tutorial-content">
-        <h2>4. Discuss images</h2>
-        <p>LangLab also works on images! Click the button on large images to start a conversation about them.</p>
-        <div class="tutorial-animation anim-step4">
-          <div class="mock-browser">
-            <div class="mock-image">
-              <div class="mock-image-btn">🧪 Discuss in LangLab</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="tutorial-step" data-step="5">
-      <div class="tutorial-content">
-        <h2>5. Answer with your voice</h2>
-        <p>Practice your pronunciation by responding to questions with your voice.</p>
-        <div class="tutorial-animation anim-step5">
-          <div class="mock-browser">
-            <div class="mock-popup-chat">
-              <div class="mock-chat-input">Type your answer...</div>
-              <div class="mock-mic-btn"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="tutorial-step" data-step="6">
-      <div class="tutorial-content">
-        <h2>6. Practice your vocabulary</h2>
-        <p>Open the sidebar to review your saved words and start a practice session to master them.</p>
-        <div class="tutorial-animation anim-step6">
-          <div class="mock-browser">
-            <div class="mock-sidebar">
-              <div class="mock-sidebar-header">Saved Words</div>
-              <div class="mock-sidebar-word">eiusmod tempor</div>
-              <div class="mock-sidebar-word">consectetur</div>
-              <button class="mock-practice-btn">🎯 Practice</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="tutorial-nav">
-      <button id="prevBtn" class="btn btn-secondary" disabled>Previous</button>
-      <button id="nextBtn" class="btn btn-primary">Next</button>
-      <button id="finishBtn" class="btn btn-primary" style="display: none;">Finish</button>
+    <div class="setup-actions">
+      <button id="finishBtn" class="btn btn-primary">Finish</button>
     </div>
   </div>
   
