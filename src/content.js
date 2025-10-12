@@ -2457,19 +2457,24 @@
       transform: 'translateX(-50%)',
       zIndex: '2147483646',
       opacity: '0',
-      transition: 'opacity 0.5s ease-in-out'
+      transition: 'opacity 0.5s ease-in-out',
+      borderRadius: '10px',
+      padding: '2px',
+      background: 'linear-gradient(90deg, #4f46e5, #c026d3, #db2777)',
+      boxShadow: '0 8px 20px rgba(0,0,0,0.25)',
     }, { id: `${EXT_CLS_PREFIX}-start-learning-widget` });
 
-    const button = createButton('', 'primary');
+    const button = createButton('', 'secondary');
     button.innerHTML = '🚀 Start learning in LangLab';
     applyStyles(button, {
-      boxShadow: '0 8px 20px rgba(0,0,0,0.25)',
+      border: 'none',
       height: '36px',
       boxSizing: 'border-box',
       padding: '0 16px',
       display: 'flex',
       alignItems: 'center',
-      gap: '8px'
+      gap: '8px',
+      width: '100%'
     });
     
     button.addEventListener('click', () => {
