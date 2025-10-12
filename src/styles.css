@@ -30,3 +30,20 @@
   animation: weblang-vocab-pulse 0.5s ease-in-out;
 }
 
+.weblang-ext-word {
+  transition: background-color 0.2s ease, color 0.2s ease;
+  border-radius: 3px;
+  padding: 1px 2px;
+  margin: 0 1px;
+}
+
+.weblang-ext-word:hover {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: #f9fafb;
+}
+
+.weblang-ext-word:hover + .weblang-ext-word,
+.weblang-ext-word:has(+ .weblang-ext-word:hover) {
+  background-color: rgba(59, 130, 246, 0.1);
+}
+

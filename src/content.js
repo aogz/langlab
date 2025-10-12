@@ -2436,6 +2436,17 @@
   function activate() {
     if (isActive) return;
     isActive = true;
+
+    const styleId = `${EXT_CLS_PREFIX}-injected-styles`;
+    if (!document.getElementById(styleId)) {
+      const link = document.createElement('link');
+      link.id = styleId;
+      link.rel = 'stylesheet';
+      link.type = 'text/css';
+      link.href = chrome.runtime.getURL('styles.css');
+      document.head.appendChild(link);
+    }
+
     addClickableStyles();
     makeElementsClickable();
     attachImageClickHandlers();
