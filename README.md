@@ -71,9 +71,9 @@ We've made it simple for you to test LangLab.
 
 ### Usage
 
-1.  Open any webpage with text content.
-2.  Click on a paragraph or block of text.
-3.  Click on individual words to highlight them for **translation**.
+1.  Open any webpage with text content in the language you selected to learn.
+2.  Click on a paragraph or block of text (Or just click on "Start learning" to activate auto mode).
+3.  Click on individual words or select multiple to highlight them for **translation**.
 4.  To ask a **question** or get a **grammar explanation**, select a sentence or paragraph, and choose the desired action from the sidebar.
 5.  See the translations, answers, and explanations appear instantly in the sidebar!
 
