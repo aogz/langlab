@@ -280,8 +280,13 @@
     popupEl = null;
     backdropEl = null;
     popupBodyRef = null;
+
+    if (activeParagraphEl) {
+      activeParagraphEl.classList.remove(`${EXT_CLS_PREFIX}-selected`);
+      activeParagraphEl = null;
+    }
+
     activeLearnableEl = null;
-    activeParagraphEl = null;
 
     if (activeParagraphEl) {
       activeParagraphEl.classList.add(`${EXT_CLS_PREFIX}-clickable`);
@@ -1809,7 +1814,8 @@
     fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif',
     backdropFilter: 'blur(2px)',
     webkitBackdropFilter: 'blur(2px)',
-    zIndex: '2147483647'
+    zIndex: '2147483647',
+    minWidth: '480px'
   };
 
   // ========== DRAG & INTERACTION HANDLERS ==========
@@ -1889,6 +1895,8 @@
       popupEl.style.transform = position.transform;
     });
 
+    updateLearnedPercentage();
+
     return { bodyEl: body };
   }
 
@@ -1897,10 +1905,22 @@
     const container = ensureContainer();
     ensureBackdrop();
 
+    const minWidth = 480;
+    const finalWidth = Math.max(rect.width, minWidth);
+    let finalLeft = rect.left + (rect.width / 2) - (finalWidth / 2);
+
+    const margin = 10;
+    if (finalLeft < margin) {
+      finalLeft = margin;
+    }
+    if (finalLeft + finalWidth > (window.innerWidth - margin)) {
+      finalLeft = window.innerWidth - finalWidth - margin;
+    }
+
     const textOverlayStyles = {
       ...POPUP_STYLES,
-      left: `${rect.left}px`,
-      width: `${rect.width}px`,
+      left: `${finalLeft}px`,
+      width: `${finalWidth}px`,
       overflow: 'visible',
       'max-height': '80vh',
       'display': 'flex',
@@ -1963,11 +1983,13 @@
       popupEl.style.transform = 'translateY(0)';
     });
 
+    updateLearnedPercentage();
+
     // Manage paragraph styles while overlay is open
     if (sourceParagraphEl) {
       activeParagraphEl = sourceParagraphEl;
       // Remove hover overlay and selected styling while active
-      activeParagraphEl.classList.remove(`${EXT_CLS_PREFIX}-selected`);
+      activeParagraphEl.classList.add(`${EXT_CLS_PREFIX}-selected`);
     } else {
       activeParagraphEl = null;
     }
@@ -2072,6 +2094,7 @@
   }
 
   function hasSubstantialText(element) {
+    if (element.querySelector('img')) return false;
     const text = element.textContent || element.innerText || '';
     const cleanText = text.trim();
     if (cleanText.length < 50) return false;
@@ -2131,6 +2154,7 @@
     const elements = document.querySelectorAll(`${blockElements}, ${leafDivs}`);
     
     elements.forEach((p) => {
+      if (p.tagName === 'IMG') return;
       if (p.closest(`.${EXT_CLS_PREFIX}-container`)) return;
       if (clickableNodes.has(p) || p.closest(`.${EXT_CLS_PREFIX}-clickable`)) return;
       if (hasClickableParent(p)) return;
@@ -2541,15 +2565,6 @@
       
       closePopupWithAnimation();
 
-      if (prevLearnableEl) {
-        if (prevLearnableEl.classList.contains(`${EXT_CLS_PREFIX}-image-button-container`)) {
-          prevLearnableEl.classList.remove(`${EXT_CLS_PREFIX}-image-button-container`);
-        }
-        if (prevLearnableEl.classList.contains(`${EXT_CLS_PREFIX}-clickable`)) {
-          prevLearnableEl.classList.remove(`${EXT_CLS_PREFIX}-clickable`);
-        }
-      }
-      
       nextItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
       setTimeout(() => {
@@ -2731,4 +2746,62 @@
       console.error('Failed to get initial vocab count:', error);
     }
   })();
+
+  function updateLearnedPercentage() {
+    if (!popupEl || !activeLearnableEl) return;
+
+    let learnableItems = Array.from(document.querySelectorAll(`.${EXT_CLS_PREFIX}-clickable, .${EXT_CLS_PREFIX}-image-button-container`));
+    
+    learnableItems.sort((a, b) => {
+      const rectA = a.getBoundingClientRect();
+      const rectB = b.getBoundingClientRect();
+      if (rectA.top !== rectB.top) {
+        return rectA.top - rectB.top;
+      }
+      return rectA.left - rectB.left;
+    });
+
+    const totalItems = learnableItems.length;
+    if (totalItems === 0) return;
+
+    const currentIndex = learnableItems.indexOf(activeLearnableEl);
+    if (currentIndex === -1) return;
+
+    const percentage = Math.round(((currentIndex + 1) / totalItems) * 100);
+
+    let percentageEl = popupEl.querySelector(`.${EXT_CLS_PREFIX}-percentage-indicator`);
+    if (!percentageEl) {
+      percentageEl = createElement('div', `${EXT_CLS_PREFIX}-percentage-indicator`, {
+        position: 'absolute',
+        top: '12px',
+        left: '12px',
+        width: '28px',
+        height: '28px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        pointerEvents: 'none',
+        zIndex: '10'
+      });
+      percentageEl.innerHTML = `
+        <svg width="28" height="28" viewBox="0 0 24 24" style="transform: rotate(-90deg);">
+          <circle cx="12" cy="12" r="10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2"></circle>
+          <circle class="progress-ring" cx="12" cy="12" r="10" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"></circle>
+        </svg>
+        <span style="position: absolute; color: #e5e7eb; font-size: 9px; font-weight: 500;"></span>
+      `;
+      popupEl.appendChild(percentageEl);
+    }
+    
+    const textSpan = percentageEl.querySelector('span');
+    textSpan.textContent = `${percentage}%`;
+
+    const progressRing = percentageEl.querySelector('.progress-ring');
+    const radius = progressRing.r.baseVal.value;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (percentage / 100) * circumference;
+
+    progressRing.style.strokeDasharray = `${circumference} ${circumference}`;
+    progressRing.style.strokeDashoffset = offset;
+  }
 })();
