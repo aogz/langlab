@@ -2590,7 +2590,7 @@
       zIndex: '2147483646',
       opacity: '0',
       transition: 'opacity 0.5s ease-in-out',
-      borderRadius: '10px',
+      borderRadius: '16px',
       padding: '2px',
       background: 'linear-gradient(90deg, #4f46e5, #c026d3, #db2777)',
       boxShadow: '0 8px 20px rgba(0,0,0,0.25)',
@@ -2600,13 +2600,24 @@
     button.innerHTML = '🚀 Start learning in LangLab';
     applyStyles(button, {
       border: 'none',
-      height: '36px',
+      height: '44px',
       boxSizing: 'border-box',
-      padding: '0 16px',
+      padding: '0 24px',
       display: 'flex',
       alignItems: 'center',
       gap: '8px',
-      width: '100%'
+      width: '100%',
+      fontSize: '15px',
+      borderRadius: '14px'
+    });
+    
+    // Add hover effects
+    const originalBg = 'rgba(31,41,55,0.7)';
+    button.addEventListener('mouseenter', () => {
+      button.style.background = 'rgba(55, 65, 81, 0.9)';
+    });
+    button.addEventListener('mouseleave', () => {
+      button.style.background = originalBg;
     });
     
     button.addEventListener('click', () => {

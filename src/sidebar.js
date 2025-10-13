@@ -218,22 +218,24 @@
 
   // Update URL dropdown with unique URLs
   function updateUrlDropdown() {
-    const urls = [...new Set(savedWords.map(word => word.url))];
+    const urlTitleMap = new Map(savedWords.map(word => [word.url, word.title || word.url]));
+    const uniqueUrls = [...urlTitleMap.keys()];
+    
     const currentValue = urlDropdown.value;
     
     // Clear existing options except "All Pages"
     urlDropdown.innerHTML = '<option value="all">All Pages</option>';
     
-    // Add URL options with full URLs
-    urls.forEach(url => {
+    // Add URL options with titles
+    uniqueUrls.forEach(url => {
       const option = createElement('option');
       option.value = url;
-      option.textContent = url; // Show full URL
+      option.textContent = urlTitleMap.get(url) || url;
       urlDropdown.appendChild(option);
     });
     
     // Restore selection if it still exists
-    if (urls.includes(currentValue)) {
+    if (uniqueUrls.includes(currentValue)) {
       urlDropdown.value = currentValue;
       currentFilter = currentValue;
     } else {
@@ -356,36 +358,8 @@
       return;
     }
 
-    // If filtering by specific URL, show simple table without URL headers
-    if (currentFilter !== 'all') {
-      renderSimpleTable(words);
-      return;
-    }
-
-    // Group words by URL for "All" view
-    const groupedWords = words.reduce((groups, word) => {
-      if (!groups[word.url]) {
-        groups[word.url] = {
-          url: word.url,
-          words: []
-        };
-      }
-      groups[word.url].words.push(word);
-      return groups;
-    }, {});
-
-    // Sort groups by most recent first
-    const sortedGroups = Object.values(groupedWords).sort((a, b) => {
-      const aLatest = Math.max(...a.words.map(w => w.timestamp));
-      const bLatest = Math.max(...b.words.map(w => w.timestamp));
-      return bLatest - aLatest;
-    });
-
-    // Render each group
-    sortedGroups.forEach(group => {
-      const groupEl = createUrlGroup(group);
-      wordsList.appendChild(groupEl);
-    });
+    // Always render a simple table regardless of the filter
+    renderSimpleTable(words);
   }
 
   // Render simple table without URL headers (for specific URL filter)
@@ -418,54 +392,6 @@
     table.appendChild(tbody);
 
     wordsList.appendChild(table);
-  }
-
-  // Create URL group element
-  function createUrlGroup(group) {
-    const groupEl = createElement('div', 'url-group', { marginBottom: '24px' });
-
-    // URL header
-    const headerEl = createElement('div', '', {
-      background: 'rgba(31,41,55,0.5)',
-      padding: '8px 12px',
-      borderRadius: '6px',
-      marginBottom: '8px',
-      borderLeft: '3px solid #2563eb'
-    });
-    headerEl.innerHTML = `
-      <div style="color: #60a5fa; font-weight: 500; font-size: 13px;">${group.url}</div>
-      <div style="color: rgba(229,231,235,0.6); font-size: 11px; margin-top: 2px;">${group.words.length} word${group.words.length !== 1 ? 's' : ''}</div>
-    `;
-    groupEl.appendChild(headerEl);
-
-    // Create table for words
-    const table = createElement('table', 'words-table');
-    
-    // Create header
-    const thead = createElement('thead');
-    thead.innerHTML = `
-      <tr>
-        <th>Word</th>
-        <th>Translation</th>
-        <th>Language</th>
-        <th>Progress</th>
-        <th></th>
-      </tr>
-    `;
-    table.appendChild(thead);
-
-    // Create body
-    const tbody = createElement('tbody');
-    // Sort words by timestamp (newest first)
-    const sortedWords = group.words.sort((a, b) => b.timestamp - a.timestamp);
-    sortedWords.forEach(word => {
-      const row = createWordRow(word);
-      tbody.appendChild(row);
-    });
-    table.appendChild(tbody);
-
-    groupEl.appendChild(table);
-    return groupEl;
   }
 
   // Create word row element
