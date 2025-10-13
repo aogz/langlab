@@ -615,7 +615,7 @@
       right: '8px',
       zIndex: '1000',
       opacity: '1',
-      transition: 'opacity 0.3s ease',
+      transition: 'opacity 0.3s ease, transform 0.2s ease-in-out',
       pointerEvents: 'auto',
       maxWidth: '200px',
       maxHeight: '40px'
@@ -629,6 +629,14 @@
       e.preventDefault();
       e.stopPropagation();
       askQuestionAboutImage(img, buttonContainer);
+    });
+    
+    // Add hover effects
+    buttonContainer.addEventListener('mouseenter', () => {
+      buttonContainer.style.transform = 'translateY(-3px)';
+    });
+    buttonContainer.addEventListener('mouseleave', () => {
+      buttonContainer.style.transform = 'translateY(0)';
     });
     
     buttonContainer.appendChild(button);
@@ -1582,11 +1590,14 @@
       padding: '0 12px',
       display: 'flex',
       alignItems: 'center',
-      gap: '6px'
+      gap: '6px',
+      transition: 'transform 0.2s ease-in-out'
     });
     btnNext.innerHTML = `Next <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m7-7-7 7-7-7"/></svg>`;
     btnNext.title = 'Next learnable item';
     btnNext.addEventListener('click', findAndActivateNextLearnableItem);
+    btnNext.addEventListener('mouseenter', () => { btnNext.style.transform = 'translateY(-2px)'; });
+    btnNext.addEventListener('mouseleave', () => { btnNext.style.transform = 'translateY(0)'; });
     leftControls.appendChild(btnNext);
 
     const mainControlsContainer = createElement('div', '', {
@@ -1617,7 +1628,10 @@
 
     const btnAsk = createButton('Ask me a question', 'primary');
     btnAsk.classList.add(`${EXT_CLS_PREFIX}-btn-ask`);
-    applyStyles(btnAsk, { height: '36px', boxSizing: 'border-box' });
+    applyStyles(btnAsk, { height: '36px', boxSizing: 'border-box', transition: 'transform 0.2s ease-in-out' });
+    
+    btnAsk.addEventListener('mouseenter', () => { btnAsk.style.transform = 'translateY(-2px)'; });
+    btnAsk.addEventListener('mouseleave', () => { btnAsk.style.transform = 'translateY(0)'; });
     
     btnAsk.addEventListener('click', async () => {
       try {
@@ -1705,7 +1719,9 @@
     if (context !== 'image-popup') {
       const btnExplain = createButton('Explain grammar', 'secondary');
       btnExplain.classList.add(`${EXT_CLS_PREFIX}-btn-explain`);
-      applyStyles(btnExplain, { height: '36px', boxSizing: 'border-box' });
+      applyStyles(btnExplain, { height: '36px', boxSizing: 'border-box', transition: 'transform 0.2s ease-in-out' });
+      btnExplain.addEventListener('mouseenter', () => { btnExplain.style.transform = 'translateY(-2px)'; });
+      btnExplain.addEventListener('mouseleave', () => { btnExplain.style.transform = 'translateY(0)'; });
       btnExplain.addEventListener('click', async () => {
         try {
           setControlsLoadingState(true, ['Analyzing...', 'Checking grammar...', 'Explaining...']);
@@ -1741,7 +1757,9 @@
     // Add View Vocabulary button to the right side
     const btnVocab = createButton('📚 Vocab', 'secondary');
     btnVocab.classList.add(`${EXT_CLS_PREFIX}-btn-vocab`);
-    applyStyles(btnVocab, { height: '36px', boxSizing: 'border-box' });
+    applyStyles(btnVocab, { height: '36px', boxSizing: 'border-box', transition: 'transform 0.2s ease-in-out' });
+    btnVocab.addEventListener('mouseenter', () => { btnVocab.style.transform = 'translateY(-2px)'; });
+    btnVocab.addEventListener('mouseleave', () => { btnVocab.style.transform = 'translateY(0)'; });
     btnVocab.addEventListener('click', async () => {
       try {
         await chrome.runtime.sendMessage({ type: 'OPEN_SIDEBAR_REQUEST' });
@@ -2023,7 +2041,6 @@
       }
       .${EXT_CLS_PREFIX}-selected {
         background-color: rgba(59,130,246,0.12) !important;
-        box-shadow: inset 3px 0 0 rgba(59,130,246,0.7);
       }
       #${EXT_CLS_PREFIX}-tooltip {
         position: fixed;
@@ -2482,6 +2499,7 @@
     document.addEventListener('mouseup', handleGlobalMouseUp, true);
     document.addEventListener('mouseup', handlePageTextSelection, false);
     document.addEventListener('mousedown', handleClickOutside, true);
+    window.addEventListener('resize', repositionPopup);
     console.log('[LangLab] Content script activated.');
   }
 
@@ -2503,6 +2521,7 @@
     document.removeEventListener('mouseup', handleGlobalMouseUp, true);
     document.removeEventListener('mouseup', handlePageTextSelection, false);
     document.removeEventListener('mousedown', handleClickOutside, true);
+    window.removeEventListener('resize', repositionPopup);
     
     // Remove clickable classes and event listeners
     document.querySelectorAll(`.${EXT_CLS_PREFIX}-clickable`).forEach(el => {
@@ -2594,6 +2613,7 @@
       padding: '2px',
       background: 'linear-gradient(90deg, #4f46e5, #c026d3, #db2777)',
       boxShadow: '0 8px 20px rgba(0,0,0,0.25)',
+      transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out'
     }, { id: `${EXT_CLS_PREFIX}-start-learning-widget` });
 
     const button = createButton('', 'secondary');
@@ -2612,12 +2632,13 @@
     });
     
     // Add hover effects
-    const originalBg = 'rgba(31,41,55,0.7)';
-    button.addEventListener('mouseenter', () => {
-      button.style.background = 'rgba(55, 65, 81, 0.9)';
+    widget.addEventListener('mouseenter', () => {
+      widget.style.transform = 'translateX(-50%) translateY(-3px)';
+      widget.style.boxShadow = '0 12px 24px rgba(0,0,0,0.3)';
     });
-    button.addEventListener('mouseleave', () => {
-      button.style.background = originalBg;
+    widget.addEventListener('mouseleave', () => {
+      widget.style.transform = 'translateX(-50%)';
+      widget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.25)';
     });
     
     button.addEventListener('click', () => {
@@ -2692,7 +2713,7 @@
       right: '20px',
       zIndex: '2147483646',
       opacity: '0',
-      transition: 'opacity 0.5s ease-in-out',
+      transition: 'opacity 0.5s ease-in-out, transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
       pointerEvents: 'none'
     }, { id: `${EXT_CLS_PREFIX}-vocab-widget` });
   
@@ -2713,6 +2734,14 @@
       } catch (error) {
         console.error('Failed to open sidebar:', error);
       }
+    });
+    
+    // Add hover effects
+    vocabWidgetEl.addEventListener('mouseenter', () => {
+      vocabWidgetEl.style.transform = 'translateY(-3px)';
+    });
+    vocabWidgetEl.addEventListener('mouseleave', () => {
+      vocabWidgetEl.style.transform = 'translateY(0)';
     });
   
     vocabWidgetEl.appendChild(button);
@@ -2814,5 +2843,31 @@
 
     progressRing.style.strokeDasharray = `${circumference} ${circumference}`;
     progressRing.style.strokeDashoffset = offset;
+  }
+
+  function repositionPopup() {
+    if (!popupEl) return;
+
+    if (activeParagraphEl) { // Text overlay
+      const rect = activeParagraphEl.getBoundingClientRect();
+      if (!rect || rect.width === 0 || rect.height === 0) return;
+
+      const minWidth = 480;
+      const finalWidth = Math.max(rect.width, minWidth);
+      let finalLeft = rect.left + (rect.width / 2) - (finalWidth / 2);
+
+      const margin = 10;
+      if (finalLeft < margin) {
+        finalLeft = margin;
+      }
+      if (finalLeft + finalWidth > (window.innerWidth - margin)) {
+        finalLeft = window.innerWidth - finalWidth - margin;
+      }
+
+      popupEl.style.left = `${finalLeft}px`;
+      popupEl.style.width = `${finalWidth}px`;
+    } else if (popupEl.classList.contains(`${EXT_CLS_PREFIX}-popup`)) { // Image popup
+      popupEl.style.left = `${window.innerWidth / 2}px`;
+    }
   }
 })();
