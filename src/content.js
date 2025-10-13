@@ -2269,7 +2269,7 @@
         const cleanWord = part.replace(/[^\p{L}\p{N}'-]/gu, '').trim();
         const span = createElement('span', `${EXT_CLS_PREFIX}-word`, {
           cursor: 'pointer',
-          transition: 'color 150ms ease-in-out, background 150ms ease-in-out',
+          transition: 'color 150ms ease-in-out, background 150ms ease-in-out, opacity 150ms ease-in-out',
           borderBottom: '1px dashed rgba(156,163,175,0.6)',
           display: 'inline-block',
           padding: '0 2px'
@@ -2278,14 +2278,53 @@
 
         const currentIndex = state.wordOrder.length;
         if (cleanWord) {
-          state.wordOrder.push({ word: cleanWord, span });
+          state.wordOrder.push({ word: cleanWord, span, index: currentIndex });
         }
+
+        span.addEventListener('mouseenter', (e) => {
+          if (state.isDragging) {
+            e.preventDefault();
+            e.stopPropagation();
+            unmarkSelected();
+            const start = state.selectionStartIndex;
+            const end = currentIndex;
+            const minIndex = Math.min(start, end);
+            const maxIndex = Math.max(start, end);
+            const sequential = state.wordOrder.slice(minIndex, maxIndex + 1);
+            state.selectedWords = sequential.map((w) => w.word);
+            markSelected(sequential.map((w) => w.span));
+          } else {
+            state.wordOrder.forEach((item) => {
+              const distance = Math.abs(currentIndex - item.index);
+              if (distance === 0) {
+                item.span.style.opacity = '1';
+              } else if (distance === 1) {
+                item.span.style.opacity = '0.8';
+              } else if (distance === 2) {
+                item.span.style.opacity = '0.6';
+              } else {
+                item.span.style.opacity = '0.5';
+              }
+            });
+          }
+        });
+
+        container.addEventListener('mouseleave', () => {
+          state.wordOrder.forEach(item => {
+            item.span.style.opacity = '1';
+          });
+        });
 
         span.addEventListener('mousedown', (e) => {
           e.preventDefault();
           e.stopPropagation();
           if (!cleanWord) return;
           
+          // Reset opacity effect on selection start
+          state.wordOrder.forEach(item => {
+            item.span.style.opacity = '1';
+          });
+
           unmarkSelected();
           
           state.isDragging = true;
@@ -2294,19 +2333,6 @@
           
           markSelected([span]);
           activeWordSelection = state;
-        });
-
-        span.addEventListener('mouseenter', (e) => {
-          if (!state.isDragging || state.selectionStartIndex === null) return;
-          e.preventDefault();
-          e.stopPropagation();
-          const start = state.selectionStartIndex;
-          const end = currentIndex;
-          const minIndex = Math.min(start, end);
-          const maxIndex = Math.max(start, end);
-          const sequential = state.wordOrder.slice(minIndex, maxIndex + 1);
-          state.selectedWords = sequential.map((w) => w.word);
-          markSelected(sequential.map((w) => w.span));
         });
 
         container.appendChild(span);
@@ -2584,16 +2610,19 @@
       
       closePopupWithAnimation();
 
-      nextItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
       setTimeout(() => {
-        if (nextItem.classList.contains(`${EXT_CLS_PREFIX}-image-button-container`)) {
-          const button = nextItem.querySelector('button');
-          if (button) button.click();
-        } else {
-          nextItem.click();
-        }
-      }, 500);
+        nextItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Add a small delay for the click to ensure scrolling is complete
+        setTimeout(() => {
+          if (nextItem.classList.contains(`${EXT_CLS_PREFIX}-image-button-container`)) {
+            const button = nextItem.querySelector('button');
+            if (button) button.click();
+          } else {
+            nextItem.click();
+          }
+        }, 100);
+      }, 300); // Wait for popup to close (250ms) + buffer
     }
   }
 
@@ -2694,8 +2723,8 @@
   setTimeout(() => {
     makeElementsClickable();
     attachImageClickHandlers();
-    const learnableItems = document.querySelectorAll(`.${EXT_CLS_PREFIX}-clickable, .${EXT_CLS_PREFIX}-image-button-container`);
-    if (learnableItems.length > 0) {
+    const clickableTextElements = document.querySelectorAll(`.${EXT_CLS_PREFIX}-clickable`);
+    if (clickableTextElements.length >= 5) {
       showStartLearningWidget();
     }
   }, 500);
