@@ -241,7 +241,6 @@ import { languages, populateLanguageSelect, checkLanguagePairAvailability } from
 
     // Add event listeners LAST, after initial state is set.
     setupForm.addEventListener('submit', handleSubmit);
-    skipBtn.addEventListener('click', handleSkip);
     
     // Update learning language options when native language changes
     nativeSelect.addEventListener('change', async () => {
