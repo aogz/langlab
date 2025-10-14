@@ -2159,7 +2159,13 @@
     if (isClickInsideInteractiveElement(event.target)) return;
     const selection = window.getSelection && window.getSelection();
     if (selection && selection.type === 'Range' && selection.toString().trim().length > 0) return;
+    
     const paragraph = event.currentTarget;
+
+    if (event.isTrusted) {
+      paragraph.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
     activeLearnableEl = paragraph;
     paragraph.classList.remove(`${EXT_CLS_PREFIX}-selected`);
     await openOverlayForElement(paragraph, paragraph);

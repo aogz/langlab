@@ -214,31 +214,6 @@ import { languages, populateLanguageSelect, checkLanguagePairAvailability } from
     }
   }
 
-  // Handle skip button
-  async function handleSkip(e) {
-    e.preventDefault();
-    skipBtn.textContent = 'Skipping...';
-    skipBtn.disabled = true;
-
-    try {
-      await saveSettings();
-      
-      // Close the setup window
-      if (chrome.tabs) {
-        const currentTab = await chrome.tabs.getCurrent();
-        if (currentTab) {
-          chrome.tabs.remove(currentTab.id);
-        }
-      } else {
-        window.close();
-      }
-    } catch (error) {
-      console.error('Failed to save settings:', error);
-      skipBtn.textContent = `I'll do this later`;
-      skipBtn.disabled = false;
-    }
-  }
-
   // Initialize the setup page
   async function init() {
     populateLanguageSelect(nativeSelect, 'Select your native language');

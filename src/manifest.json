@@ -3,6 +3,11 @@
   "name": "LangLab Selector & Translator",
   "version": "0.1.0",
   "description": "Select words on any page, highlight like LangLab, and translate client-side.",
+  "icons": {
+    "16": "assets/icon.png",
+    "48": "assets/icon.png",
+    "128": "assets/icon.png"
+  },
   "action": {
     "default_title": "LangLab Selector & Translator",
     "default_popup": "popup.html"
