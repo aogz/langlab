@@ -291,6 +291,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === 'WEBLANG_TRANSLATE') {
+    const { text, sourceLang, targetLang, requestId } = message;
+    translate(text, targetLang, sourceLang, sender.tab.id, requestId)
+      .then(translation => {
+        sendResponse({ ok: true, translation });
+      })
+      .catch(error => {
+        sendResponse({ ok: false, error: error.message });
+      });
+    return true; // Indicates that the response is sent asynchronously
+  }
+
   if (message.type === 'DETECT_LANGUAGE') {
     detectLanguageCode(message.text, sender.tab.id, message.requestId)
       .then(result => sendResponse({ success: true, result }))

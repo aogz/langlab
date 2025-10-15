@@ -997,6 +997,28 @@
       gap: '8px'
     });
 
+    // Add translation button
+    const translateBtn = createButton('', 'secondary');
+    applyStyles(translateBtn, {
+      padding: '8px',
+      minWidth: '40px'
+    });
+    translateBtn.title = 'Translate a word';
+    translateBtn.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z" fill="currentColor"/>
+      </svg>
+    `;
+    
+    // Add hover effects
+    translateBtn.addEventListener('mouseenter', () => {
+      translateBtn.style.background = 'rgba(55,65,81,0.9)';
+    });
+    
+    translateBtn.addEventListener('mouseleave', () => {
+      translateBtn.style.background = 'rgba(31,41,55,0.7)';
+    });
+
     const micBtn = createButton('', 'secondary');
     applyStyles(micBtn, {
       padding: '8px',
@@ -1027,6 +1049,34 @@
 
     const sendBtn = createButton('Send', 'primary');
 
+    // Add proofreader button
+    const proofreaderBtn = createButton('', 'secondary');
+    applyStyles(proofreaderBtn, {
+      padding: '8px',
+      minWidth: '40px'
+    });
+    proofreaderBtn.title = 'Check grammar and spelling';
+    proofreaderBtn.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="14,2 14,8 20,8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="16" y1="13" x2="8" y2="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="16" y1="17" x2="8" y2="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="10,9 9,9 8,9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    `;
+    
+    // Add hover effects
+    proofreaderBtn.addEventListener('mouseenter', () => {
+      proofreaderBtn.style.background = 'rgba(55,65,81,0.9)';
+    });
+    
+    proofreaderBtn.addEventListener('mouseleave', () => {
+      proofreaderBtn.style.background = 'rgba(31,41,55,0.7)';
+    });
+
+    right.appendChild(translateBtn);
+    right.appendChild(proofreaderBtn);
     right.appendChild(micBtn);
     right.appendChild(sendBtn);
     row.appendChild(input);
@@ -1396,6 +1446,11 @@
       const txt = (input.value || '').trim();
       if (!txt) return;
       
+      // Close translation block if it's visible
+      if (isTranslationVisible) {
+        hideTranslationBlock();
+      }
+      
       setControlsLoadingState(true, ['Evaluating...', 'Checking...', 'Almost there...']);
       if (inputContainer) inputContainer.style.display = 'none';
       
@@ -1481,6 +1536,535 @@
         updateInputVisibility(targetEl);
       }
     }
+    // Translation functionality
+    let translationBlock = null;
+    let isTranslationVisible = false;
+    
+    translateBtn.addEventListener('click', () => {
+      if (!isTranslationVisible) {
+        showTranslationBlock();
+      } else {
+        hideTranslationBlock();
+      }
+    });
+
+    function showTranslationBlock() {
+      if (isTranslationVisible) return;
+      isTranslationVisible = true;
+      
+      // Update button state with visual indicator
+      translateBtn.style.background = '#1a73e8';
+      translateBtn.style.color = '#ffffff';
+      translateBtn.style.border = '2px solid #4285f4';
+      translateBtn.style.boxShadow = '0 0 8px rgba(26, 115, 232, 0.4)';
+      translateBtn.title = 'Hide translation';
+      
+      // Create translation block
+      translationBlock = createElement('div', `${EXT_CLS_PREFIX}-translation-block`, {
+        marginBottom: '8px',
+        padding: '8px',
+        background: 'rgba(31, 41, 55, 0.5)',
+        border: '1px solid rgba(75, 85, 99, 0.2)',
+        borderRadius: '6px',
+        fontSize: '12px'
+      });
+
+      // Create header with close button
+      const header = createElement('div', '', {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '8px'
+      });
+
+      const title = createElement('div', '', {
+        fontSize: '12px',
+        fontWeight: '600',
+        color: '#e5e7eb'
+      });
+      title.textContent = 'Translate';
+
+      const closeBtn = createElement('button', '', {
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        padding: '2px',
+        borderRadius: '3px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#9ca3af'
+      });
+      closeBtn.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z" fill="currentColor"/>
+        </svg>
+      `;
+
+      // Create side-by-side layout
+      const translationLayout = createElement('div', '', {
+        display: 'flex',
+        gap: '8px',
+        alignItems: 'flex-start'
+      });
+
+      // Source language section
+      const sourceSection = createElement('div', '', {
+        flex: '1',
+        display: 'flex',
+        flexDirection: 'column'
+      });
+
+      const sourceLabel = createElement('div', '', {
+        fontSize: '10px',
+        color: '#9ca3af',
+        marginBottom: '2px',
+        textTransform: 'uppercase',
+        fontWeight: '500'
+      });
+
+      const translationInput = createElement('input', '', {
+        width: '100%',
+        padding: '6px 8px',
+        borderRadius: '4px',
+        border: '1px solid rgba(75, 85, 99, 0.6)',
+        background: 'rgba(31, 41, 55, 0.7)',
+        color: '#e5e7eb',
+        fontSize: '12px',
+        boxSizing: 'border-box'
+      });
+      translationInput.type = 'text';
+      translationInput.placeholder = 'Enter word...';
+
+      // Target language section
+      const targetSection = createElement('div', '', {
+        flex: '1',
+        display: 'flex',
+        flexDirection: 'column'
+      });
+
+      const targetLabel = createElement('div', '', {
+        fontSize: '10px',
+        color: '#9ca3af',
+        marginBottom: '2px',
+        textTransform: 'uppercase',
+        fontWeight: '500'
+      });
+
+      const resultContainer = createElement('div', '', {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+        padding: '6px 8px',
+        background: 'rgba(37, 99, 235, 0.1)',
+        border: '1px solid rgba(37, 99, 235, 0.3)',
+        borderRadius: '4px',
+        minHeight: '32px'
+      });
+
+      const resultText = createElement('div', '', {
+        flex: '1',
+        fontSize: '12px',
+        color: '#9ca3af'
+      });
+      resultText.textContent = 'Translation will appear here';
+
+      const copyBtn = createElement('button', '', {
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        padding: '2px',
+        borderRadius: '3px',
+        display: 'none',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#9ca3af'
+      });
+      copyBtn.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" fill="currentColor"/>
+        </svg>
+      `;
+
+      // Set language codes in labels
+      async function setLanguageLabels() {
+        try {
+          const learningLang = await getLearningLanguage();
+          const nativeLang = await getNativeLanguage();
+          
+          sourceLabel.textContent = nativeLang.toUpperCase();
+          targetLabel.textContent = learningLang.toUpperCase();
+        } catch (error) {
+          console.error('Error setting language labels:', error);
+          sourceLabel.textContent = 'EN';
+          targetLabel.textContent = 'LEARN';
+        }
+      }
+
+      // Set language labels
+      setLanguageLabels();
+
+      // Event handlers
+      let isTranslating = false;
+      let translateTimeout;
+
+      async function performTranslation() {
+        const text = translationInput.value.trim();
+        if (!text || isTranslating) return;
+
+        isTranslating = true;
+        resultText.textContent = 'Translating...';
+        resultText.style.color = '#9ca3af';
+
+        try {
+          // Get the learning language
+          const learningLang = await getLearningLanguage();
+          const nativeLang = await getNativeLanguage();
+          
+          // Translate from native language to learning language
+          const translation = await translateTo(text, learningLang, nativeLang);
+          
+          resultText.textContent = translation;
+          resultText.style.color = '#e5e7eb';
+          copyBtn.style.display = 'flex';
+          
+          // Copy functionality
+          copyBtn.onclick = () => {
+            navigator.clipboard.writeText(translation).then(() => {
+              const originalHTML = copyBtn.innerHTML;
+              copyBtn.innerHTML = `
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="#34a853"/>
+                </svg>
+              `;
+              setTimeout(() => {
+                copyBtn.innerHTML = originalHTML;
+              }, 2000);
+            });
+          };
+
+        } catch (error) {
+          console.error('Translation error:', error);
+          resultText.textContent = 'Translation failed';
+          resultText.style.color = '#d93025';
+          copyBtn.style.display = 'none';
+        } finally {
+          isTranslating = false;
+        }
+      }
+
+      // Auto-translate on input
+      translationInput.addEventListener('input', () => {
+        clearTimeout(translateTimeout);
+        translateTimeout = setTimeout(() => {
+          if (translationInput.value.trim()) {
+            performTranslation();
+          } else {
+            resultText.textContent = 'Translation will appear here';
+            resultText.style.color = '#9ca3af';
+            copyBtn.style.display = 'none';
+          }
+        }, 500);
+      });
+
+      // Assemble translation block
+      header.appendChild(title);
+      header.appendChild(closeBtn);
+      
+      sourceSection.appendChild(sourceLabel);
+      sourceSection.appendChild(translationInput);
+      
+      resultContainer.appendChild(resultText);
+      resultContainer.appendChild(copyBtn);
+      targetSection.appendChild(targetLabel);
+      targetSection.appendChild(resultContainer);
+      
+      translationLayout.appendChild(sourceSection);
+      translationLayout.appendChild(targetSection);
+      
+      translationBlock.appendChild(header);
+      translationBlock.appendChild(translationLayout);
+      
+      // Insert after the input container
+      targetEl.insertBefore(translationBlock, inputContainer.nextSibling);
+      
+      // Focus the input
+      translationInput.focus();
+      
+      // Event handlers
+      closeBtn.onclick = hideTranslationBlock;
+    }
+
+    function hideTranslationBlock() {
+      if (translationBlock && translationBlock.parentNode) {
+        translationBlock.parentNode.removeChild(translationBlock);
+      }
+      translationBlock = null;
+      isTranslationVisible = false;
+
+      translateBtn.style.background = 'rgba(31,41,55,0.7)';
+      translateBtn.style.color = '#e5e7eb';
+      translateBtn.style.border = '1px solid rgba(75, 85, 99, 0.8)';
+      translateBtn.style.boxShadow = 'none';
+      translateBtn.title = 'Translate a word';
+    }
+
+    // Proofreader functionality
+    proofreaderBtn.addEventListener('click', async () => {
+      const text = input.value.trim();
+      if (!text) {
+        alert('Please enter some text to check.');
+        return;
+      }
+
+      try {
+        // Check if Proofreader API is available
+        if (typeof Proofreader === 'undefined') {
+          alert('Proofreader API is not available in this browser. Please use Chrome 141+ with the origin trial enabled.');
+          return;
+        }
+
+        // Check availability
+        const availability = Proofreader.availability();
+        if (availability === 'unavailable') {
+          alert('Proofreader API is not available on this device.');
+          return;
+        }
+
+        // Show loading state
+        proofreaderBtn.disabled = true;
+        proofreaderBtn.style.opacity = '0.5';
+        proofreaderBtn.title = 'Checking...';
+
+        let proofreader;
+        
+        // If downloadable, create proofreader with download monitoring
+        if (availability === 'downloadable') {
+          const learningLang = await getLearningLanguage();
+          proofreader = await Proofreader.create({
+            expectedInputLanguages: [learningLang],
+            monitor(m) {
+              m.addEventListener('downloadprogress', (e) => {
+                proofreaderBtn.title = `Downloading ${Math.round(e.loaded * 100)}%...`;
+              });
+            }
+          });
+        } else {
+          // If available, create proofreader directly
+          const learningLang = await getLearningLanguage();
+          proofreader = await Proofreader.create({
+            expectedInputLanguages: [learningLang]
+          });
+        }
+
+        // Perform proofreading
+        const result = await proofreader.proofread(text);
+        
+        // Display results
+        showProofreaderResults(result, text);
+
+      } catch (error) {
+        console.error('Proofreader error:', error);
+        alert('Failed to check text. Please try again.');
+      } finally {
+        // Reset button state
+        proofreaderBtn.disabled = false;
+        proofreaderBtn.style.opacity = '1';
+        proofreaderBtn.title = 'Check grammar and spelling';
+      }
+    });
+
+    function showProofreaderResults(result, originalText) {
+      // Create proofreader results modal
+      const modal = createElement('div', '', {
+        position: 'fixed',
+        top: '0',
+        left: '0',
+        width: '100%',
+        height: '100%',
+        background: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: '999999'
+      });
+
+      const modalContent = createElement('div', '', {
+        background: 'rgba(31, 41, 55, 0.95)',
+        border: '1px solid rgba(75, 85, 99, 0.8)',
+        borderRadius: '12px',
+        padding: '20px',
+        minWidth: '400px',
+        maxWidth: '600px',
+        maxHeight: '80vh',
+        overflow: 'auto',
+        color: '#e5e7eb'
+      });
+
+      const header = createElement('div', '', {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '16px'
+      });
+
+      const title = createElement('h3', '', {
+        margin: '0',
+        fontSize: '18px',
+        fontWeight: '600'
+      });
+      title.textContent = 'Grammar & Spelling Check';
+
+      const closeBtn = createElement('button', '', {
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        padding: '4px',
+        borderRadius: '4px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#9ca3af'
+      });
+      closeBtn.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z" fill="currentColor"/>
+        </svg>
+      `;
+
+      const content = createElement('div', '', {
+        marginBottom: '16px'
+      });
+
+      // Show corrected text
+      const correctedSection = createElement('div', '', {
+        marginBottom: '16px'
+      });
+
+      const correctedLabel = createElement('div', '', {
+        fontSize: '14px',
+        fontWeight: '600',
+        marginBottom: '8px',
+        color: '#e5e7eb'
+      });
+      correctedLabel.textContent = 'Corrected Text:';
+
+      const correctedText = createElement('div', '', {
+        padding: '12px',
+        background: 'rgba(37, 99, 235, 0.1)',
+        border: '1px solid rgba(37, 99, 235, 0.3)',
+        borderRadius: '8px',
+        fontSize: '14px',
+        lineHeight: '1.5'
+      });
+      correctedText.textContent = result.corrected;
+
+      // Show corrections if any
+      if (result.corrections && result.corrections.length > 0) {
+        const correctionsSection = createElement('div', '', {
+          marginBottom: '16px'
+        });
+
+        const correctionsLabel = createElement('div', '', {
+          fontSize: '14px',
+          fontWeight: '600',
+          marginBottom: '8px',
+          color: '#e5e7eb'
+        });
+        correctionsLabel.textContent = `Found ${result.corrections.length} correction(s):`;
+
+        const correctionsList = createElement('div', '', {
+          maxHeight: '200px',
+          overflow: 'auto'
+        });
+
+        result.corrections.forEach((correction, index) => {
+          const correctionItem = createElement('div', '', {
+            padding: '8px',
+            marginBottom: '8px',
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            borderRadius: '6px',
+            fontSize: '12px'
+          });
+
+          const originalText = originalText.substring(correction.startIndex, correction.endIndex);
+          const correctedText = correction.correction;
+
+          correctionItem.innerHTML = `
+            <div style="margin-bottom: 4px;">
+              <strong>Error:</strong> "${originalText}"
+            </div>
+            <div style="margin-bottom: 4px;">
+              <strong>Correction:</strong> "${correctedText}"
+            </div>
+            ${correction.explanation ? `<div><strong>Explanation:</strong> ${correction.explanation}</div>` : ''}
+          `;
+
+          correctionsList.appendChild(correctionItem);
+        });
+
+        correctionsSection.appendChild(correctionsLabel);
+        correctionsSection.appendChild(correctionsList);
+        content.appendChild(correctionsSection);
+      } else {
+        const noErrorsMsg = createElement('div', '', {
+          padding: '12px',
+          background: 'rgba(34, 197, 94, 0.1)',
+          border: '1px solid rgba(34, 197, 94, 0.3)',
+          borderRadius: '8px',
+          fontSize: '14px',
+          textAlign: 'center',
+          color: '#22c55e'
+        });
+        noErrorsMsg.textContent = 'No errors found! Your text looks good.';
+        content.appendChild(noErrorsMsg);
+      }
+
+      const buttonContainer = createElement('div', '', {
+        display: 'flex',
+        gap: '8px',
+        justifyContent: 'flex-end'
+      });
+
+      const applyBtn = createButton('Apply Corrections', 'primary');
+      const cancelBtn = createButton('Close', 'secondary');
+
+      // Event handlers
+      applyBtn.addEventListener('click', () => {
+        input.value = result.corrected;
+        document.body.removeChild(modal);
+      });
+
+      closeBtn.addEventListener('click', () => {
+        document.body.removeChild(modal);
+      });
+
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          document.body.removeChild(modal);
+        }
+      });
+
+      // Assemble modal
+      header.appendChild(title);
+      header.appendChild(closeBtn);
+      
+      correctedSection.appendChild(correctedLabel);
+      correctedSection.appendChild(correctedText);
+      
+      content.appendChild(correctedSection);
+      
+      buttonContainer.appendChild(applyBtn);
+      buttonContainer.appendChild(cancelBtn);
+      
+      modalContent.appendChild(header);
+      modalContent.appendChild(content);
+      modalContent.appendChild(buttonContainer);
+      modal.appendChild(modalContent);
+      document.body.appendChild(modal);
+    }
+
     sendBtn.addEventListener('click', handleSend);
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSend(); });
   }
