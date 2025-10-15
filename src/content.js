@@ -2723,6 +2723,17 @@
     return true;
   }
 
+  function isElementInViewport(el) {
+    if (el.offsetParent === null) return false;
+    const rect = el.getBoundingClientRect();
+    return (
+      rect.bottom > 0 &&
+      rect.right > 0 &&
+      rect.top < (window.innerHeight || document.documentElement.clientHeight) &&
+      rect.left < (window.innerWidth || document.documentElement.clientWidth)
+    );
+  }
+
   function isClickInsideInteractiveElement(target) {
     if (!target || !(target instanceof Element)) return false;
     return !!target.closest('a, button, input, textarea, select, [role="button"], [role="link"], [contenteditable=""], [contenteditable="true"]');
@@ -2762,6 +2773,7 @@
     
     elements.forEach((p) => {
       if (p.tagName === 'IMG') return;
+      if (!isElementInViewport(p)) return;
       if (p.closest(`.${EXT_CLS_PREFIX}-container`)) return;
       if (clickableNodes.has(p) || p.closest(`.${EXT_CLS_PREFIX}-clickable`)) return;
       if (hasClickableParent(p)) return;
