@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="src/assets/icon.png" alt="LangLab Icon" width="128">
+</p>
+
 # 🚀 LangLab: Turn the Web into Your Language Classroom
 
 **LangLab is a revolutionary Chrome extension that transforms the entire web into a personalized, interactive language classroom. Stop switching tabs and start immersing yourself in any language, on any site.**
