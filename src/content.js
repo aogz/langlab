@@ -232,7 +232,10 @@
       if (response && response.success) {
         if (response.isNewWord) {
           pageVocabCount++;
-          showOrUpdateVocabWidget();
+          const vocabBtn = document.getElementById(`${EXT_CLS_PREFIX}-vocab-btn`);
+          if (vocabBtn) {
+            vocabBtn.textContent = `📚 Vocab (${pageVocabCount})`;
+          }
         }
         return response;
       } else {
@@ -628,6 +631,7 @@
     button.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      img.scrollIntoView({ behavior: 'smooth', block: 'start' });
       askQuestionAboutImage(img, buttonContainer);
     });
     
@@ -2338,9 +2342,10 @@
     bar.appendChild(leftControls);
     bar.appendChild(mainControlsContainer);
 
-    // Add View Vocabulary button to the right side
-    const btnVocab = createButton('📚 Vocab', 'secondary');
-    btnVocab.classList.add(`${EXT_CLS_PREFIX}-btn-vocab`);
+    const rightControls = createElement('div');
+    const vocabButtonText = pageVocabCount > 0 ? `📚 Vocab (${pageVocabCount})` : '📚 Vocab';
+    const btnVocab = createButton(vocabButtonText, 'secondary');
+    btnVocab.id = `${EXT_CLS_PREFIX}-vocab-btn`;
     applyStyles(btnVocab, { height: '36px', boxSizing: 'border-box', transition: 'transform 0.2s ease-in-out' });
     btnVocab.addEventListener('mouseenter', () => { btnVocab.style.transform = 'translateY(-2px)'; });
     btnVocab.addEventListener('mouseleave', () => { btnVocab.style.transform = 'translateY(0)'; });
@@ -2351,9 +2356,17 @@
         console.error('Failed to open sidebar:', error);
       }
     });
+    rightControls.appendChild(btnVocab);
+    bar.appendChild(rightControls);
 
-    // Order: language button (left), center content, vocab button (right)
-    bar.appendChild(btnVocab);
+    window.currentLanguageDetectionPromise = detectLanguageCode(selectedText);
+    window.currentLanguageDetectionPromise.then(detectedLang => {
+      currentDetectedLanguage = detectedLang;
+    }).catch(err => {
+      console.error('Language detection failed:', err);
+      currentDetectedLanguage = 'unknown';
+    });
+
     return bar;
   }
 
@@ -2506,6 +2519,15 @@
     clearPopup();
     const container = ensureContainer();
     ensureBackdrop();
+
+    // Start language detection early
+    window.currentLanguageDetectionPromise = detectLanguageCode(text);
+    window.currentLanguageDetectionPromise.then(lang => {
+      currentDetectedLanguage = lang;
+    }).catch(err => {
+      console.error('Language detection failed:', err);
+      currentDetectedLanguage = 'unknown';
+    });
 
     const minWidth = 480;
     const finalWidth = Math.max(rect.width, minWidth);
@@ -2773,7 +2795,7 @@
     
     elements.forEach((p) => {
       if (p.tagName === 'IMG') return;
-      if (!isElementInViewport(p)) return;
+      // if (!isElementInViewport(p)) return;
       if (p.closest(`.${EXT_CLS_PREFIX}-container`)) return;
       if (clickableNodes.has(p) || p.closest(`.${EXT_CLS_PREFIX}-clickable`)) return;
       if (hasClickableParent(p)) return;
@@ -2901,11 +2923,11 @@
               if (distance === 0) {
                 item.span.style.opacity = '1';
               } else if (distance === 1) {
-                item.span.style.opacity = '0.8';
+                item.span.style.opacity = '0.9';
               } else if (distance === 2) {
-                item.span.style.opacity = '0.6';
+                item.span.style.opacity = '0.8';
               } else {
-                item.span.style.opacity = '0.5';
+                item.span.style.opacity = '0.7';
               }
             });
           }
@@ -3067,13 +3089,11 @@
     
     if (message.type === 'VOCAB_COUNT_UPDATED') {
       pageVocabCount = message.count;
-      showOrUpdateVocabWidget();
     }
     
     if (message.type === 'ACTIVATE_AND_UPDATE') {
       activate();
       pageVocabCount = message.count;
-      showOrUpdateVocabWidget();
     }
 
     if (message.type === 'DEACTIVATE') {
@@ -3139,7 +3159,6 @@
     clearTip();
     hideStartLearningWidget();
     pageVocabCount = 0;
-    showOrUpdateVocabWidget();
   
     // Remove all event listeners and mutations observers
     if (observer) {
@@ -3185,8 +3204,20 @@
       return;
     }
 
-    const prevLearnableEl = activeLearnableEl;
-    const activeIndex = prevLearnableEl ? learnableItems.indexOf(prevLearnableEl) : -1;
+    let activeIndex = -1;
+    if (activeLearnableEl) {
+      activeIndex = learnableItems.indexOf(activeLearnableEl);
+    } else {
+      // If no active element, check if an image popup is open
+      const imgPopup = document.querySelector(`.${EXT_CLS_PREFIX}-popup img`);
+      if (imgPopup) {
+        const buttonContainer = imgPopup.closest(`.${EXT_CLS_PREFIX}-image-button-container`);
+        if (buttonContainer) {
+          activeIndex = learnableItems.indexOf(buttonContainer);
+        }
+      }
+    }
+    
     let nextItem;
 
     if (activeIndex === -1) {
@@ -3331,77 +3362,6 @@
     }
   }, 500);
 
-  function ensureVocabWidget() {
-    const existingWidget = document.getElementById(`${EXT_CLS_PREFIX}-vocab-widget`);
-    if (existingWidget) {
-      vocabWidgetEl = existingWidget;
-      return;
-    }
-  
-    vocabWidgetEl = createElement('div', '', {
-      position: 'fixed',
-      bottom: '20px',
-      right: '20px',
-      zIndex: '2147483646',
-      opacity: '0',
-      transition: 'opacity 0.5s ease-in-out, transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
-      pointerEvents: 'none'
-    }, { id: `${EXT_CLS_PREFIX}-vocab-widget` });
-  
-    const button = createButton('', 'secondary');
-    applyStyles(button, {
-      boxShadow: '0 8px 20px rgba(0,0,0,0.25)',
-      height: '36px',
-      boxSizing: 'border-box',
-      padding: '0 16px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px'
-    });
-  
-    button.addEventListener('click', async () => {
-      try {
-        await chrome.runtime.sendMessage({ type: 'OPEN_SIDEBAR_REQUEST' });
-      } catch (error) {
-        console.error('Failed to open sidebar:', error);
-      }
-    });
-    
-    // Add hover effects
-    vocabWidgetEl.addEventListener('mouseenter', () => {
-      vocabWidgetEl.style.transform = 'translateY(-3px)';
-    });
-    vocabWidgetEl.addEventListener('mouseleave', () => {
-      vocabWidgetEl.style.transform = 'translateY(0)';
-    });
-  
-    vocabWidgetEl.appendChild(button);
-    document.body.appendChild(vocabWidgetEl);
-  }
-  
-  function showOrUpdateVocabWidget() {
-    if (pageVocabCount < 1) {
-      const widget = document.getElementById(`${EXT_CLS_PREFIX}-vocab-widget`);
-      if (widget) {
-        widget.style.opacity = '0';
-        widget.style.pointerEvents = 'none';
-        setTimeout(() => {
-          if (widget.parentNode) {
-            widget.parentNode.removeChild(widget);
-          }
-        }, 500);
-      }
-      vocabWidgetEl = null;
-    } else {
-      ensureVocabWidget();
-      
-      const button = vocabWidgetEl.querySelector('button');
-      button.innerHTML = `📚 Vocab (${pageVocabCount})`;
-      vocabWidgetEl.style.opacity = '1';
-      vocabWidgetEl.style.pointerEvents = 'auto';
-    }
-  }
-
   // Load initial vocab count for the page
   (async () => {
     try {
@@ -3411,7 +3371,6 @@
       });
       if (response && response.success) {
         pageVocabCount = response.count;
-        showOrUpdateVocabWidget();
       }
     } catch (error) {
       console.error('Failed to get initial vocab count:', error);
@@ -3501,4 +3460,5 @@
       popupEl.style.left = `${window.innerWidth / 2}px`;
     }
   }
+
 })();
