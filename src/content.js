@@ -2167,7 +2167,8 @@
       gridTemplateColumns: 'auto 1fr auto',
       alignItems: 'center',
       gap: '10px',
-      marginTop: '10px'
+      marginTop: '10px',
+      padding: '12px 0 0 0',
     });
 
     const leftControls = createElement('div');
@@ -2430,7 +2431,7 @@
     backdropFilter: 'blur(2px)',
     webkitBackdropFilter: 'blur(2px)',
     zIndex: '2147483647',
-    minWidth: '480px'
+    minWidth: '600px'
   };
 
   // ========== DRAG & INTERACTION HANDLERS ==========
@@ -2460,7 +2461,7 @@
       ...POPUP_STYLES,
       left: `${position.x}px`,
       transform: position.transform,
-      width: '480px',
+      width: '600px',
       'max-height': '80vh',
       'display': 'flex',
       'flex-direction': 'column',
@@ -2529,7 +2530,7 @@
       currentDetectedLanguage = 'unknown';
     });
 
-    const minWidth = 480;
+    const minWidth = 600;
     const finalWidth = Math.max(rect.width, minWidth);
     let finalLeft = rect.left + (rect.width / 2) - (finalWidth / 2);
 
@@ -2545,7 +2546,7 @@
       ...POPUP_STYLES,
       left: `${finalLeft}px`,
       width: `${finalWidth}px`,
-      overflow: 'visible',
+      overflow: 'hidden',
       'max-height': '80vh',
       'display': 'flex',
       'flex-direction': 'column',
@@ -2569,14 +2570,22 @@
     closeBtn.onclick = () => closePopupWithAnimation();
     popupEl.appendChild(closeBtn);
 
+    // Create scrollable content area
+    const scrollableContent = createElement('div', '', {
+      'overflow-y': 'auto',
+      'flex-grow': '1',
+      'display': 'flex',
+      'flex-direction': 'column',
+      'min-height': '0' // Important for flex scrolling
+    });
+
     const wordsContainer = createElement('div', '', {
       lineHeight: '1.8',
       fontSize: '19px',
       color: '#e5e7eb',
       marginBottom: '8px',
-      'overflow-y': 'auto',
-      'flex-shrink': '0',
-      paddingTop: '20px'
+      paddingTop: '20px',
+      'flex-shrink': '0'
     });
 
     renderClickableWords(wordsContainer, text);
@@ -2586,13 +2595,24 @@
       fontSize: '18px',
       color: '#e5e7eb',
       marginTop: '8px',
-      'overflow-y': 'auto',
       'flex-grow': '1'
     });
 
-    popupEl.appendChild(wordsContainer);
-    popupEl.appendChild(translationBodyEl);
+    // Add content to scrollable area
+    scrollableContent.appendChild(wordsContainer);
+    scrollableContent.appendChild(translationBodyEl);
+
+    // Create fixed controls bar
     const controlsBar = buildControlsBar('overlay', text);
+    applyStyles(controlsBar, {
+      'flex-shrink': '0',
+      'border-top': '1px solid #374151',
+      'padding': '12px 0 0;',
+      'margin': '0'
+    });
+
+    // Add to popup
+    popupEl.appendChild(scrollableContent);
     popupEl.appendChild(controlsBar);
 
     container.appendChild(popupEl);
@@ -2772,6 +2792,35 @@
     return false;
   }
 
+  function isAllTextInInteractiveElements(element) {
+    // Get all text nodes in the element
+    const textNodes = [];
+    const walker = document.createTreeWalker(
+      element,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+    
+    let node;
+    while (node = walker.nextNode()) {
+      if (node.textContent.trim()) {
+        textNodes.push(node);
+      }
+    }
+    
+    // If no text nodes, return false (not all text in interactive elements)
+    if (textNodes.length === 0) {
+      return false;
+    }
+    
+    // Check if all text nodes are inside interactive elements
+    return textNodes.every(textNode => {
+      const parent = textNode.parentElement;
+      return parent && parent.closest('a, button, [role="button"], [role="link"], [contenteditable="true"]');
+    });
+  }
+
   async function handleParagraphClick(event) {
     if (isClickInsideInteractiveElement(event.target)) return;
     const selection = window.getSelection && window.getSelection();
@@ -2791,7 +2840,9 @@
   function makeElementsClickable() {
     const blockElements = 'p, li, h1, h2, h3, h4, h5, h6, blockquote, dd, dt';
     const leafDivs = 'div:not(:has(p, li, h1, h2, h3, h4, h5, h6, blockquote, dd, dt, div, section, article, header, footer, aside, nav, ul, ol, table))';
-    const elements = document.querySelectorAll(`${blockElements}, ${leafDivs}`);
+    const leafSections = 'section:not(:has(p, li, h1, h2, h3, h4, h5, h6, blockquote, dd, dt, div, section, article, header, footer, aside, nav, ul, ol, table))';
+    const leafArticles = 'article:not(:has(p, li, h1, h2, h3, h4, h5, h6, blockquote, dd, dt, div, section, article, header, footer, aside, nav, ul, ol, table))';
+    const elements = document.querySelectorAll(`${blockElements}, ${leafDivs}, ${leafSections}, ${leafArticles}`);
     
     elements.forEach((p) => {
       if (p.tagName === 'IMG') return;
@@ -2800,6 +2851,7 @@
       if (clickableNodes.has(p) || p.closest(`.${EXT_CLS_PREFIX}-clickable`)) return;
       if (hasClickableParent(p)) return;
       if (!hasSubstantialText(p)) return;
+      if (isAllTextInInteractiveElements(p)) return;
       p.classList.add(`${EXT_CLS_PREFIX}-clickable`);
       p.addEventListener('click', handleParagraphClick, true);
 
@@ -2885,10 +2937,17 @@
 
     container.innerHTML = '';
 
-    const parts = String(text || '').split(/(\s+)/);
+    // Handle <br> tags by splitting on them and creating line breaks
+    const textWithLineBreaks = String(text || '').replace(/<br\s*\/?>/gi, '\n');
+    const parts = textWithLineBreaks.split(/(\s+)/);
+    
     parts.forEach((part) => {
       if (part.trim() === '') {
         container.appendChild(document.createTextNode(part));
+      } else if (part === '\n') {
+        // Create a line break element
+        const br = document.createElement('br');
+        container.appendChild(br);
       } else {
         const cleanWord = part.replace(/[^\p{L}\p{N}'-]/gu, '').trim();
         const span = createElement('span', `${EXT_CLS_PREFIX}-word`, {
@@ -3041,6 +3100,7 @@
       }
 
       const selectedText = selection.toString().trim();
+      console.log('[LangLab] Text selection detected:', selectedText);
       // Only trigger for meaningful selections
       if (selectedText.length > 1 && selectedText.split(' ').length < 100) {
         const range = selection.getRangeAt(0);
@@ -3053,6 +3113,14 @@
         // Check if the selection is inside an editable element, but allow if it has content
         const editableParent = range.startContainer.parentElement.closest('[contenteditable="true"]');
         if (editableParent && selectedText.length === 0) {
+          return;
+        }
+
+        // Exclude SVG elements and all nested nodes from selection
+        const startElement = range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer.parentElement : range.startContainer;
+        const endElement = range.endContainer.nodeType === Node.TEXT_NODE ? range.endContainer.parentElement : range.endContainer;
+        
+        if (startElement?.closest('svg') || endElement?.closest('svg')) {
           return;
         }
 
@@ -3106,6 +3174,10 @@
 
     if (message.type === 'DEACTIVATE') {
       deactivate();
+    }
+    
+    if (message.type === 'ACTIVATE') {
+      activate();
     }
     
     // Handle image fetch results from service worker
@@ -3450,7 +3522,7 @@
       const rect = activeParagraphEl.getBoundingClientRect();
       if (!rect || rect.width === 0 || rect.height === 0) return;
 
-      const minWidth = 480;
+      const minWidth = 600;
       const finalWidth = Math.max(rect.width, minWidth);
       let finalLeft = rect.left + (rect.width / 2) - (finalWidth / 2);
 

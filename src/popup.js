@@ -1,5 +1,6 @@
 import { getDomainFromUrl } from './utils.js';
 
+const activateExtensionButton = document.getElementById('activate-extension');
 const ignoreSiteButton = document.getElementById('ignore-site');
 const openSidebarButton = document.getElementById('open-sidebar');
 const setupStatus = document.getElementById('setupStatus');
@@ -82,6 +83,87 @@ openSidebarButton.addEventListener('click', () => {
 
 setupChangeBtn.addEventListener('click', () => {
   chrome.runtime.openOptionsPage();
+});
+
+activateExtensionButton.addEventListener('click', async () => {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab && tab.id) {
+      // Check if this is a valid page for content scripts
+      if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('moz-extension://')) {
+        activateExtensionButton.textContent = '❌ Not supported on this page';
+        activateExtensionButton.disabled = true;
+        setTimeout(() => {
+          activateExtensionButton.textContent = '🎯 Activate on Page';
+          activateExtensionButton.disabled = false;
+        }, 3000);
+        return;
+      }
+
+      // Try to send message to content script
+      try {
+        await chrome.tabs.sendMessage(tab.id, { type: 'ACTIVATE' });
+        
+        // Update button text to show it's activated
+        activateExtensionButton.textContent = '✅ Activated';
+        activateExtensionButton.disabled = true;
+        
+        // Reset button after 2 seconds
+        setTimeout(() => {
+          activateExtensionButton.textContent = '🎯 Activate on Page';
+          activateExtensionButton.disabled = false;
+        }, 2000);
+      } catch (messageError) {
+        // If content script isn't loaded, try to inject it
+        console.log('Content script not found, attempting to inject...');
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['content.js']
+          });
+          
+          // Wait a bit for the script to load, then try again
+          setTimeout(async () => {
+            try {
+              await chrome.tabs.sendMessage(tab.id, { type: 'ACTIVATE' });
+              activateExtensionButton.textContent = '✅ Activated';
+              activateExtensionButton.disabled = true;
+              setTimeout(() => {
+                activateExtensionButton.textContent = '🎯 Activate on Page';
+                activateExtensionButton.disabled = false;
+              }, 2000);
+            } catch (retryError) {
+              console.error('Failed to activate after injection:', retryError);
+              activateExtensionButton.textContent = '❌ Failed to activate';
+              activateExtensionButton.disabled = true;
+              setTimeout(() => {
+                activateExtensionButton.textContent = '🎯 Activate on Page';
+                activateExtensionButton.disabled = false;
+              }, 3000);
+            }
+          }, 500);
+        } catch (injectionError) {
+          console.error('Failed to inject content script:', injectionError);
+          activateExtensionButton.textContent = '❌ Cannot activate on this page';
+          activateExtensionButton.disabled = true;
+          setTimeout(() => {
+            activateExtensionButton.textContent = '🎯 Activate on Page';
+            activateExtensionButton.disabled = false;
+          }, 3000);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to activate extension:', error);
+    // Show error state briefly
+    activateExtensionButton.textContent = '❌ Failed';
+    activateExtensionButton.disabled = true;
+    
+    setTimeout(() => {
+      activateExtensionButton.textContent = '🎯 Activate on Page';
+      activateExtensionButton.disabled = false;
+    }, 2000);
+  }
 });
 
 document.addEventListener('DOMContentLoaded', loadSettings);

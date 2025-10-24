@@ -549,24 +549,108 @@ async function handleNavigationOrUpdate(tabId, url) {
     }
 
     if (weblangLearnLang) {
+      // Enhanced language detection: check document lang + analyze clickable elements
       const results = await chrome.scripting.executeScript({
         target: { tabId },
-        function: () => document.documentElement.lang
+        function: () => {
+          // Get document language
+          const docLang = document.documentElement.lang;
+          
+          const clickableSelectors = [
+            'p', 'div', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+          ];
+          
+          const clickableElements = [];
+          for (const selector of clickableSelectors) {
+            const elements = document.querySelectorAll(selector);
+            for (const el of elements) {
+              if (el.offsetParent !== null && el.textContent.trim()) { // visible and has text
+                clickableElements.push(el);
+                if (clickableElements.length >= 3) break;
+              }
+            }
+            if (clickableElements.length >= 3) break;
+          }
+          
+          // Extract text from first 3 clickable elements
+          const clickableTexts = clickableElements.slice(0, 3).map(el => {
+            return el.textContent.trim() || el.value || el.placeholder || '';
+          }).filter(text => text.length > 0);
+          
+          return {
+            docLang: docLang,
+            clickableTexts: clickableTexts
+          };
+        }
       });
 
-      if (results && results[0] && results[0].result === weblangLearnLang) {
-        // Language matches, ensure content script is injected and activated
-        await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+      if (results && results[0]) {
+        const { docLang, clickableTexts } = results[0].result;
         
-        const vocabCount = await getVocabCountForUrl(url);
-        chrome.tabs.sendMessage(tabId, { type: 'ACTIVATE_AND_UPDATE', count: vocabCount }).catch(() => {});
-        chrome.tabs.sendMessage(tabId, { type: 'VOCAB_COUNT_UPDATED', count: vocabCount }).catch(() => {});
+        // Check if document language matches
+        const docLangMatches = docLang === weblangLearnLang;
         
-        // Update badge with word count
-        chrome.action.setBadgeText({ text: vocabCount > 0 ? vocabCount.toString() : '', tabId });
-        chrome.action.setBadgeBackgroundColor({ color: '#2563eb', tabId });
+        // Analyze clickable elements if we have them
+        let clickableLangMatches = false;
+        if (clickableTexts.length > 0) {
+          try {
+            // Use language detection on clickable texts
+            const detectedLangs = [];
+            for (const text of clickableTexts) {
+              if (text.length > 2) { // Only detect for meaningful text
+                const detectedLang = await detectLanguageCode(text, tabId, `clickable-detect-${Date.now()}`);
+                if (detectedLang && detectedLang !== 'unknown') {
+                  detectedLangs.push(detectedLang);
+                }
+              }
+            }
+            
+            if (detectedLangs.length > 0) {
+              // Count language occurrences
+              const langCounts = {};
+              detectedLangs.forEach(lang => {
+                langCounts[lang] = (langCounts[lang] || 0) + 1;
+              });
+              
+              // Find most common language
+              const sortedLangs = Object.entries(langCounts)
+                .sort(([,a], [,b]) => b - a);
+              
+              if (sortedLangs.length > 0) {
+                const mostCommonLang = sortedLangs[0][0];
+                const mostCommonCount = sortedLangs[0][1];
+                
+                // Use most common language if 2+ elements have same language, otherwise use first detected
+                const finalClickableLang = mostCommonCount >= 2 ? mostCommonLang : detectedLangs[0];
+                clickableLangMatches = finalClickableLang === weblangLearnLang;
+              }
+            }
+          } catch (error) {
+            console.warn('Error detecting language from clickable elements:', error);
+          }
+        }
+        
+        // Activate if either document language or clickable elements language matches
+        if (docLangMatches || clickableLangMatches) {
+          // Language matches, ensure content script is injected and activated
+          await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+          
+          const vocabCount = await getVocabCountForUrl(url);
+          chrome.tabs.sendMessage(tabId, { type: 'ACTIVATE_AND_UPDATE', count: vocabCount }).catch(() => {});
+          chrome.tabs.sendMessage(tabId, { type: 'VOCAB_COUNT_UPDATED', count: vocabCount }).catch(() => {});
+          
+          // Update badge with word count
+          chrome.action.setBadgeText({ text: vocabCount > 0 ? vocabCount.toString() : '', tabId });
+          chrome.action.setBadgeBackgroundColor({ color: '#2563eb', tabId });
+        } else {
+          // Language does not match, deactivate content script
+          chrome.tabs.sendMessage(tabId, { type: 'DEACTIVATE' }).catch(() => {});
+          
+          // Clear badge for non-matching language
+          chrome.action.setBadgeText({ text: '', tabId });
+        }
       } else {
-        // Language does not match, deactivate content script
+        // Fallback: deactivate if detection fails
         chrome.tabs.sendMessage(tabId, { type: 'DEACTIVATE' }).catch(() => {});
         
         // Clear badge for non-matching language
