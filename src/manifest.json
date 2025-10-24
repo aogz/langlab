@@ -10,7 +10,11 @@
   },
   "action": {
     "default_title": "LangLab Selector & Translator",
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_badge": {
+      "text": "0",
+      "color": "#2563eb"
+    }
   },
   "permissions": [
     "activeTab",

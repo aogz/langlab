@@ -2351,9 +2351,9 @@
     btnVocab.addEventListener('mouseleave', () => { btnVocab.style.transform = 'translateY(0)'; });
     btnVocab.addEventListener('click', async () => {
       try {
-        await chrome.runtime.sendMessage({ type: 'OPEN_SIDEBAR_REQUEST' });
+        await chrome.runtime.sendMessage({ type: 'OPEN_POPUP_REQUEST' });
       } catch (error) {
-        console.error('Failed to open sidebar:', error);
+        console.error('Failed to open popup:', error);
       }
     });
     rightControls.appendChild(btnVocab);
@@ -3089,11 +3089,19 @@
     
     if (message.type === 'VOCAB_COUNT_UPDATED') {
       pageVocabCount = message.count;
+      const vocabBtn = document.getElementById(`${EXT_CLS_PREFIX}-vocab-btn`);
+      if (vocabBtn) {
+        vocabBtn.textContent = pageVocabCount > 0 ? `📚 Vocab (${pageVocabCount})` : '📚 Vocab';
+      }
     }
     
     if (message.type === 'ACTIVATE_AND_UPDATE') {
       activate();
       pageVocabCount = message.count;
+      const vocabBtn = document.getElementById(`${EXT_CLS_PREFIX}-vocab-btn`);
+      if (vocabBtn) {
+        vocabBtn.textContent = pageVocabCount > 0 ? `📚 Vocab (${pageVocabCount})` : '📚 Vocab';
+      }
     }
 
     if (message.type === 'DEACTIVATE') {

@@ -37,14 +37,14 @@ let languageDetectorPromise = null;
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || !sender) return;
 
-  if (message.type === 'OPEN_SIDEBAR_REQUEST') {
+  if (message.type === 'OPEN_POPUP_REQUEST') {
     // This is triggered by a user click in the content script
     (async () => {
       if (sender.tab && sender.tab.id) {
         try {
-          await chrome.sidePanel.open({ tabId: sender.tab.id });
+          await chrome.action.openPopup();
         } catch (e) {
-          console.error(`Failed to open side panel for tab ${sender.tab.id}:`, e);
+          console.error(`Failed to open popup for tab ${sender.tab.id}:`, e);
         }
       }
     })();
@@ -278,7 +278,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'SAVE_WORD_TO_VOCAB') {
     const { selectedWord, translationText, url, title, detectedLanguage } = message;
     saveWordToVocab(selectedWord, translationText, url, title, detectedLanguage)
-      .then(response => sendResponse(response))
+      .then(async response => {
+        // Update badge with new word count if word was saved successfully
+        if (response.success && response.isNewWord) {
+          const vocabCount = await getVocabCountForUrl(url);
+          chrome.action.setBadgeText({ text: vocabCount > 0 ? vocabCount.toString() : '', tabId: sender.tab.id });
+          chrome.action.setBadgeBackgroundColor({ color: '#2563eb', tabId: sender.tab.id });
+          
+          // Also send message to content script to update button text
+          chrome.tabs.sendMessage(sender.tab.id, { type: 'VOCAB_COUNT_UPDATED', count: vocabCount }).catch(() => {});
+        }
+        sendResponse(response);
+      })
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true; // Indicates that the response is sent asynchronously
   }
@@ -531,6 +542,9 @@ async function handleNavigationOrUpdate(tabId, url) {
     if (domain && ignoreList.includes(domain)) {
       // If domain is ignored, ensure content script is deactivated
       chrome.tabs.sendMessage(tabId, { type: 'DEACTIVATE' }).catch(() => {});
+      
+      // Clear badge for ignored domains
+      chrome.action.setBadgeText({ text: '', tabId });
       return;
     }
 
@@ -546,9 +560,17 @@ async function handleNavigationOrUpdate(tabId, url) {
         
         const vocabCount = await getVocabCountForUrl(url);
         chrome.tabs.sendMessage(tabId, { type: 'ACTIVATE_AND_UPDATE', count: vocabCount }).catch(() => {});
+        chrome.tabs.sendMessage(tabId, { type: 'VOCAB_COUNT_UPDATED', count: vocabCount }).catch(() => {});
+        
+        // Update badge with word count
+        chrome.action.setBadgeText({ text: vocabCount > 0 ? vocabCount.toString() : '', tabId });
+        chrome.action.setBadgeBackgroundColor({ color: '#2563eb', tabId });
       } else {
         // Language does not match, deactivate content script
         chrome.tabs.sendMessage(tabId, { type: 'DEACTIVATE' }).catch(() => {});
+        
+        // Clear badge for non-matching language
+        chrome.action.setBadgeText({ text: '', tabId });
       }
     }
   } catch (error) {
