@@ -306,14 +306,14 @@
 
     if (backdropToClose) {
       backdropToClose.style.opacity = '0';
-      backdropToClose.style.transition = 'opacity 0.25s ease-out';
+      backdropToClose.style.transition = 'opacity 0.4s ease-out';
     }
 
     // Remove from DOM after animation
     setTimeout(() => {
       if (popupToClose.parentNode) popupToClose.parentNode.removeChild(popupToClose);
       if (backdropToClose && backdropToClose.parentNode) backdropToClose.parentNode.removeChild(backdropToClose);
-    }, 250); // This should match transition duration
+    }, 400); // This should match transition duration
 
     resetSelectionState();
   }
@@ -321,16 +321,55 @@
   function ensureBackdrop() {
     const container = ensureContainer();
     if (backdropEl && container.contains(backdropEl)) return backdropEl;
+    
+    // Create rectangular blue gradient border effect
+    const createGradientBorder = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // Use viewport dimensions
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      
+      // Create rectangular gradient from edges to center
+      const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      
+      // Add gradient stops for rectangular blue fade - smaller coverage
+      gradient.addColorStop(0, 'rgba(135, 206, 250, 0.3)');     // Top-left corner
+      gradient.addColorStop(0.15, 'rgba(135, 206, 250, 0.1)');  // Quick fade
+      gradient.addColorStop(0.5, 'rgba(135, 206, 250, 0)');     // Center transparent
+      gradient.addColorStop(0.85, 'rgba(135, 206, 250, 0.1)');  // Quick fade
+      gradient.addColorStop(1, 'rgba(135, 206, 250, 0.3)');    // Bottom-right corner
+      
+      // Fill with gradient
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      return canvas.toDataURL();
+    };
+    
     backdropEl = createElement('div', `${EXT_CLS_PREFIX}-backdrop`, {
       position: 'fixed',
       inset: '0',
       pointerEvents: 'none',
       backdropFilter: 'none',
       webkitBackdropFilter: 'none',
-      background: 'transparent',
-      zIndex: '2147483646'
+      backgroundImage: `url(${createGradientBorder()})`,
+      backgroundSize: '100% 100%',
+      backgroundRepeat: 'no-repeat',
+      opacity: '0',
+      transition: 'opacity 0.4s ease-out',
+      zIndex: '2147483646',
+      animation: `${EXT_CLS_PREFIX}-gradient-pulse 3s ease-in-out infinite`
     });
+    
     container.appendChild(backdropEl);
+    
+    // Fade in animation
+    requestAnimationFrame(() => {
+      backdropEl.style.opacity = '1';
+    });
+    
     return backdropEl;
   }
 
@@ -2694,6 +2733,16 @@
       }
       @keyframes weblang-spinner-anim {
         to { transform: rotate(360deg); }
+      }
+      @keyframes ${EXT_CLS_PREFIX}-gradient-pulse {
+        0%, 100% { 
+          opacity: 0.6;
+          filter: brightness(1);
+        }
+        50% { 
+          opacity: 0.8;
+          filter: brightness(1.1);
+        }
       }
       .${EXT_CLS_PREFIX}-teacher-explanation code {
         background-color: rgba(0,0,0,0.2);
