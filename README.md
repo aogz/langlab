@@ -50,7 +50,7 @@ This project showcases the power of client-side AI to create more responsive, pr
 
 ## 🎬 Demo Video
 
-*[Link to your 3-minute demo video on YouTube or Vimeo will go here]*
+https://youtu.be/a_r6dGgamv0
 
 ## 🛠️ How to Use & Test
 
