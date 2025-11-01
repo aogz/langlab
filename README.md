@@ -10,6 +10,20 @@
 
 ---
 
+## Table of Contents
+
+- [The Challenge: Immersive Learning, Interrupted](#the-challenge-immersive-learning-interrupted)
+- [Our Solution: The Web Is Your Classroom](#our-solution-the-web-is-your-classroom)
+- [Features](#-features)
+- [Powered by Chrome's Built-in AI](#-powered-by-chromes-built-in-ai)
+- [Demo Video](#-demo-video)
+- [How to Use & Test](#️-how-to-use--test)
+  - [Installation](#installation)
+  - [Usage](#usage)
+- [License](#-license)
+
+---
+
 ## The Challenge: Immersive Learning, Interrupted
 
 Language learners thrive on immersion. Reading articles, blogs, and news in a target language is one of the most effective ways to build vocabulary and understanding. However, the constant need to switch tabs to look up unknown words breaks the flow, disrupts concentration, and makes the learning process feel disjointed and frustrating.
