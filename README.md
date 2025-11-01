@@ -74,6 +74,14 @@ We've made it simple for you to test LangLab.
     -   Set your native language and the language you want to learn.
     -   Click **"Save"**.
 
+4. **Enable expiremental APIs**:
+    You might need to enable certain flags by going to [chrome://flags](chrome://flags):
+    -  Prompt API for Gemini Nano (Enable Multilingual)
+    -  Prompt API for Gemini Nano with Multimodal Input
+    -  Proofreader API for Gemini Nano
+
+
+
 ### Usage
 
 1.  Open any webpage with text content in the language you selected to learn.
