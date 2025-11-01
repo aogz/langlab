@@ -60,7 +60,7 @@ We've made it simple for you to test LangLab.
 
 1.  **Clone the Repository**:
     ```bash
-    git clone https://github.com/yourusername/langlab.git
+    git clone git@github.com:aogz/langlab.git
     cd langlab
     ```
 2.  **Load the Extension in Chrome**:

@@ -55,10 +55,6 @@ import { languages, populateLanguageSelect, checkLanguagePairAvailability } from
         .filter(result => result && (result.availability === 'available' || result.availability === 'downloadable'))
         .map(result => result.lang);
 
-      const unavailableLanguages = results
-        .filter(result => result && result.availability === 'unavailable')
-        .map(result => result.lang);
-
       // Add available languages first
       availableLanguages.forEach(lang => {
         const option = createElement('option');
@@ -66,21 +62,6 @@ import { languages, populateLanguageSelect, checkLanguagePairAvailability } from
         option.textContent = `${lang.flag} ${lang.name}`;
         learningSelect.appendChild(option);
       });
-
-      // Add unavailable languages with indication
-      if (unavailableLanguages.length > 0) {
-        const separator = createElement('option');
-        separator.disabled = true;
-        separator.textContent = '─── Limited support ───';
-        learningSelect.appendChild(separator);
-
-        unavailableLanguages.forEach(lang => {
-          const option = createElement('option', '', { color: '#9ca3af' });
-          option.value = lang.code;
-          option.textContent = `${lang.flag} ${lang.name} (limited)`;
-          learningSelect.appendChild(option);
-        });
-      }
 
       // Restore previous selection if still available
       if (currentLearningLang && learningSelect.querySelector(`option[value="${currentLearningLang}"]`)) {
