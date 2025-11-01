@@ -37,8 +37,9 @@ LangLab is proud to be built using **Chrome's built-in AI APIs**, participating 
 
 -   **Translator API**: Delivers a fast, private, and seamless translation experience for selected text
 - **Language Detection API**: Built-in language detection to activate extension only when needed.
--   **Prompt API**: Powers our Contextual Q&A and Grammar Guru features. 
-   - Multimodal support for **image and audio input**, you can provide an image to generate questions or speak your answers directly to the extension.
+-   **Prompt API**: Powers our Contextual Q&A and Grammar Guru features.
+-   **Proofreader API**: Verify your answers. 
+  - Multimodal support for **image and audio input**, you can provide an image to generate questions or speak your answers directly to the extension.
 
 Using on-device models means:
 -   **🚀 Blazing Speeds**: Translations are almost instantaneous.
@@ -50,7 +51,7 @@ This project showcases the power of client-side AI to create more responsive, pr
 
 ## 🎬 Demo Video
 
-*[Link to your 3-minute demo video on YouTube or Vimeo will go here]*
+https://youtu.be/a_r6dGgamv0
 
 ## 🛠️ How to Use & Test
 
